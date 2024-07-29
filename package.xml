@@ -1,0 +1,22 @@
+<?xml version="2.0"?>
+<package format="3">
+  <name>human_model</name>
+  <version>0.0.0</version>
+  <description>The rdyn_core package</description>
+
+
+  <maintainer email="manuel.beschi@unibs.it">Manue Beschi</maintainer>
+ 
+  <license>BSD</license>
+
+  <url type="website">https://github.com/JRL-CARI-CNR-UNIBS/human_model</url>
+
+  <author email="manuel.beschi@unibs.it">Manuel beschi</author>
+
+  <buildtool_depend>cmake</buildtool_depend>
+
+  
+  <depend>rdyn_core</depend>
+  <export>
+  </export>
+</package>
