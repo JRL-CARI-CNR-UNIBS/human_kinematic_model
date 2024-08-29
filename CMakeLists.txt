@@ -54,24 +54,24 @@ target_link_libraries(human_model
 add_library(human_model::human_model ALIAS human_model)
 
 
-add_executable(test test/test_fk_ik.cpp)
-target_link_libraries(test
-  PUBLIC
-  human_model::human_model)
+#add_executable(test test/test_fk_ik.cpp)
+#target_link_libraries(test
+#  PUBLIC
+#  human_model::human_model)
 #target_compile_definitions(test PUBLIC PROJECT_SRC_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
 #cnr_target_compile_options(test)
 
 
 
-if(BUILD_EXAMPLE)
-## example of usage
-  add_executable(test test/test.cpp)
-  target_link_libraries(test
-    PUBLIC
-    human_model::human_model)
-  target_compile_definitions(rdyn_speed_test PUBLIC PROJECT_SRC_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
-  cnr_target_compile_options(rdyn_speed_test)
-endif()
+#if(BUILD_EXAMPLE)
+### example of usage
+#  add_executable(test test/test.cpp)
+#  target_link_libraries(test
+#    PUBLIC
+#    human_model::human_model)
+#  target_compile_definitions(rdyn_speed_test PUBLIC PROJECT_SRC_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
+#  cnr_target_compile_options(rdyn_speed_test)
+#endif()
 #################
 ## END - Build ##
 #################
