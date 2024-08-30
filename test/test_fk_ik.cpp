@@ -52,16 +52,16 @@ int main(int argc, char *argv[])
 
     human_model::Human28DOF::fk(q2,param2,kp2_in_ext);
     double distance = human_model::Human28DOF::keypointDistance(kp_in_ext,kp2_in_ext,diff_in_ext);
-//    std::cout << "q           : \n" << q.transpose() << std::endl;
-//    std::cout << "q2          : \n" << q2.transpose() << std::endl;
-//    std::cout << "diff q      : \n" << (q-q2).transpose() << std::endl;
-//    std::cout << "param       : \n" << param.transpose() << std::endl;
-//    std::cout << "param2      : \n" << param2.transpose() << std::endl;
-//    std::cout << "diff param  : \n" << (param-param2).norm() << std::endl;
-//    std::cout << "kp          : \n" << kp_in_ext << std::endl;
-//    std::cout << "kp2         : \n" << kp2_in_ext << std::endl;
-//    std::cout << "kp diff     : \n" << diff_in_ext << std::endl;
-//    std::cout << "distance    : \n" << distance << std::endl;
+   std::cout << "q           : \n" << q.transpose() << std::endl;
+   std::cout << "q2          : \n" << q2.transpose() << std::endl;
+   std::cout << "diff q      : \n" << (q-q2).transpose() << std::endl;
+   std::cout << "param       : \n" << param.transpose() << std::endl;
+   std::cout << "param2      : \n" << param2.transpose() << std::endl;
+   std::cout << "diff param  : \n" << (param-param2).norm() << std::endl;
+   std::cout << "kp          : \n" << kp_in_ext << std::endl;
+   std::cout << "kp2         : \n" << kp2_in_ext << std::endl;
+   std::cout << "kp diff     : \n" << diff_in_ext << std::endl;
+   std::cout << "distance    : \n" << distance << std::endl;
 
 //    human_model::Human28DOF::print(q,param);
     assert(("distance is greater than threshold",distance<1e-8));

@@ -2,12 +2,18 @@ from sympy.matrices import Matrix, eye, zeros, ones, diag, GramSchmidt
 import sympy as sym
 
 
-q1=sym.var('q1') 
-q2=sym.var('q2')
-q3=sym.var('q3')
-q4=sym.var('q4') # upper arm length
-q5=sym.var('q5')
-q6=sym.var('q6') # lower arm length
+# q1 shoulder rot z
+# q2 shoulder rot x
+# q3 shoulder rot y
+# q4 upper arm length  translation y  (param)
+# q5 elbow rot z
+# q6 lower arm length  translation y (param)
+q1=sym.var('q1')    
+q2=sym.var('q2')   
+q3=sym.var('q3')   
+q4=sym.var('q4') #    upper arm length
+q5=sym.var('q5')   
+q6=sym.var('q6') #    lower arm length
 
 
 
@@ -47,6 +53,12 @@ T45=sym.Matrix.vstack(
 T56=sym.eye(4)
 T56[1,3]=q6
 T26=T23*T34*T45*T56
-print(f"WRIST x = {T26[0,3]}")
-print(f"WRIST y = {T26[1,3]}")
-print(f"WRIST z = {T26[2,3]}")
+print(f"WRIST x 26= {T26[0,3]}")
+print(f"WRIST y 26= {T26[1,3]}")
+print(f"WRIST z 26= {T26[2,3]}")
+
+
+T06=T04*T45*T56
+print(f"WRIST x 06= {T06[0,3]}")
+print(f"WRIST y 06= {T06[1,3]}")
+print(f"WRIST z 06= {T06[2,3]}")

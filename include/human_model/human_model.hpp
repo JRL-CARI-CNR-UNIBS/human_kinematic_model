@@ -81,17 +81,19 @@ public:
   static void ik(const keypoints& measures_in_ext,
                  Eigen::VectorXd& configuration,
                  Eigen::VectorXd& param);
+
   static void fk(const Eigen::VectorXd& configuration,
                  const Eigen::VectorXd& param,
                  keypoints& kp_in_ext) ;
 
   static double keypointDistance(const keypoints& kp1_in_ext,
-                               const keypoints& kp2_in_ext,
-                               keypoints& diff_in_ext);
+                                 const keypoints& kp2_in_ext,
+                                 keypoints& diff_in_ext);
+
 
   static void trunckIk(const keypoints& measures_in_ext,
-                        Eigen::VectorXd& q,
-                        Eigen::VectorXd& param);
+                       Eigen::VectorXd& q,
+                       Eigen::VectorXd& param);
 
   static void trunckFk(const Eigen::VectorXd& q,
                        const Eigen::VectorXd& param,
@@ -100,6 +102,7 @@ public:
                        Eigen::Affine3d &T_ext_rhip,
                        Eigen::Affine3d &T_ext_lhip,
                        Eigen::Affine3d &T_ext_chest);
+
 
   static void headFk(const Eigen::VectorXd& q,
                      const Eigen::VectorXd& param,
@@ -112,31 +115,30 @@ public:
                      Eigen::VectorXd& param);
 
 
-  static void rightLimbFk(  const Eigen::VectorXd& qarm,
-                              const Eigen::VectorXd& param,
-                              Eigen::Vector3d& elbow_in_limb,
-                              Eigen::Vector3d& wrist_in_limb);
+  static void rightLimbFk(const Eigen::VectorXd& qarm,
+                          const Eigen::VectorXd& param,
+                          Eigen::Vector3d& elbow_in_limb,
+                          Eigen::Vector3d& wrist_in_limb);
 
-
-  static void leftLimbFk(  const Eigen::VectorXd& qarm,
-                             const Eigen::VectorXd& param,
-                             Eigen::Vector3d& elbow_in_limb,
-                             Eigen::Vector3d& wrist_in_limb);
+  static void leftLimbFk(const Eigen::VectorXd& qarm,
+                         const Eigen::VectorXd& param,
+                         Eigen::Vector3d& elbow_in_limb,
+                         Eigen::Vector3d& wrist_in_limb);
 
   static void rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
-                             const Eigen::Vector3d& wrist_in_limb,
-                            const Eigen::VectorXd& param,
-                              Eigen::VectorXd& qarm);
-
+                          const Eigen::Vector3d& wrist_in_limb,
+                          const Eigen::VectorXd& param,
+                          Eigen::VectorXd& qarm);
 
   static void leftLimbIk(const Eigen::Vector3d& elbow_in_limb,
-                           const Eigen::Vector3d& wrist_in_limb,
-                           const Eigen::VectorXd& param,
-                              Eigen::VectorXd& qarm);
+                         const Eigen::Vector3d& wrist_in_limb,
+                         const Eigen::VectorXd& param,
+                         Eigen::VectorXd& qarm);
+
 
   static void print(const Eigen::VectorXd& q,
                     const Eigen::VectorXd& param);
-  friend std::ostream& operator<<(std::ostream& os, const keypoints& keypoints);
+  // friend std::ostream& operator<<(std::ostream& os, const keypoints& keypoints); // is this function ever used?
 
 };
 

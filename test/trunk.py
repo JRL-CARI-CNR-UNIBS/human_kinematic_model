@@ -3,8 +3,8 @@ import sympy as sym
 
 
 # hip
-q1=sym.var('q1') #shoulders rotz
-q2=sym.var('q2') #hips rotz
+q1=sym.var('q1') #spine rotz (T_hip0_hip1)
+q2=sym.var('q2') #hips rotx (T_hip1_hip2)
 
 
 R01=sym.rot_axis3(-q1) # rot_axis3 is counterclockwise!
