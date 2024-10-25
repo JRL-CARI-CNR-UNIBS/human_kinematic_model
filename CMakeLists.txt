@@ -27,6 +27,15 @@ option(BUILD_EXAMPLE            "COMPILE THE EXAMPLE" OFF)
 #############################
 find_package(rdyn_core REQUIRED)
 #cnr_enable_testing(ENABLE_TESTING ENABLE_COVERAGE)
+
+find_package(Python COMPONENTS Interpreter REQUIRED) # for the installation of the python package
+
+# detect virtualenv and set Pip args accordingly
+if(DEFINED ENV{VIRTUAL_ENV} OR DEFINED ENV{CONDA_PREFIX})
+  set(_pip_args)
+else()
+  set(_pip_args "--user")
+endif()
 #############################
 ## END DEPENDANCIES        ##
 #############################
@@ -109,6 +118,8 @@ install(FILES
   ${CMAKE_CURRENT_BINARY_DIR}/human_modelConfigVersion.cmake
   DESTINATION "share/human_model/cmake")
 
+# Install the Python package in development mode (live changes)
+execute_process(COMMAND ${Python_EXECUTABLE} -m pip install ${_pip_args} -e ${CMAKE_CURRENT_LIST_DIR})
 
 # make uninstall
 add_custom_target("uninstall" COMMENT "Uninstall installed files")

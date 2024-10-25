@@ -44,3 +44,5 @@ Testing/
 
 compile_commands.json
 
+# python packaging files
+human_model.egg-info/
