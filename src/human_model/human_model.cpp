@@ -73,8 +73,8 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
   double q6cosq5=wrist_in_2(1)-q4;
 
   q5=std::atan2(q6sinq5,q6cosq5);
-
 }
+
 
 void Human28DOF::leftLimbIk(const Eigen::Vector3d& elbow_in_limb,
                             const Eigen::Vector3d& wrist_in_limb,
@@ -145,10 +145,9 @@ void  Human28DOF::leftLimbFk(const Eigen::VectorXd& qarm,
 }
 
 
-
-void Human28DOF::trunckIk(const keypoints& measures_in_ext,
-                               Eigen::VectorXd& q,
-                               Eigen::VectorXd& param)
+void Human28DOF::trunkIk(const keypoints& measures_in_ext,
+                          Eigen::VectorXd& q,
+                          Eigen::VectorXd& param)
 {
   q.resize(7+3);
   param.resize(3);
@@ -171,8 +170,6 @@ void Human28DOF::trunckIk(const keypoints& measures_in_ext,
   shoulder_distance= (measures_in_ext.left_shoulder-measures_in_ext.right_shoulder).norm();
   chest_hip_distance=(upper_chest-lower_chest).norm();
   hip_distance=(measures_in_ext.left_hip-measures_in_ext.right_hip).norm();
-
-
 
   Eigen::Matrix3d chest_rot;
 
@@ -213,15 +210,10 @@ void Human28DOF::trunckIk(const keypoints& measures_in_ext,
     cosq2=hip_versor_in_chest(1)/std::cos(hip_rotz);
 
   hip_rotx=std::atan2(hip_versor_in_chest(2),cosq2);
-
-
-//  assert(("right shoulder reference frame has wrong origin",(T_ext_rshoulder.translation()-measures_in_ext.right_shoulder).norm()<1e-8));
-//  assert(("left shoulder reference frame has wrong origin",(T_ext_lshoulder.translation()-measures_in_ext.left_shoulder).norm()<1e-8));
-//  assert(("right shoulder reference frame has wrong origin",(T_ext_rhip.translation()-measures_in_ext.right_hip).norm()<1e-8));
-//  assert(("left shoulder reference frame has wrong origin", (T_ext_lhip.translation()- measures_in_ext.left_hip).norm()<1e-8));
 }
 
-void Human28DOF::trunckFk(const Eigen::VectorXd &q,
+
+void Human28DOF::trunkFk(const Eigen::VectorXd &q,
                                const Eigen::VectorXd &param,
                                Eigen::Affine3d& T_ext_rshoulder,
                                Eigen::Affine3d& T_ext_lshoulder,
@@ -229,7 +221,6 @@ void Human28DOF::trunckFk(const Eigen::VectorXd &q,
                                Eigen::Affine3d& T_ext_lhip,
                                Eigen::Affine3d& T_ext_chest)
 {
-
   const double& shoulder_rotx=q(7);
   const double& hip_rotz=q(8);
   const double& hip_rotx=q(9);
@@ -246,7 +237,6 @@ void Human28DOF::trunckFk(const Eigen::VectorXd &q,
 
   Eigen::Affine3d T_chest_shoulder;
   T_chest_shoulder=Eigen::AngleAxisd(shoulder_rotx,Eigen::Vector3d::UnitX());
-
 
   // rshoulder reference frame:
   // rshoulder_z axis parallel to shoulder_versor_in_ext
@@ -285,7 +275,6 @@ void Human28DOF::trunckFk(const Eigen::VectorXd &q,
   T_ext_rshoulder=T_ext_chest*T_chest_shoulder*T_sholder_rshoulder;
 
 
-
   Eigen::Affine3d T_chest_hip0;
   T_chest_hip0.setIdentity();
   T_chest_hip0.translation()(2)=-chest_hip_distance;
@@ -314,9 +303,8 @@ void Human28DOF::trunckFk(const Eigen::VectorXd &q,
 
   T_ext_lhip=T_ext_chest*T_chest_hip0*T_hip0_hip1*T_hip1_hip2*T_hip2_lhip3*T_lhip3_lhip;
   T_ext_rhip=T_ext_chest*T_chest_hip0*T_hip0_hip1*T_hip1_hip2*T_hip2_rhip3*T_rhip3_rhip;
-
-
 }
+
 
 void Human28DOF::headFk(const Eigen::VectorXd& q,
                             const Eigen::VectorXd& param,
@@ -338,17 +326,18 @@ void Human28DOF::headFk(const Eigen::VectorXd& q,
   T_ext_head=T_ext_chest*T_chest_head0*T_head0_head1*T_head1_head;
 }
 
+
 void Human28DOF::headIk(const keypoints& measures_in_ext,
-                            const Eigen::Affine3d& T_ext_chest,
-                            Eigen::VectorXd& q,
-                            Eigen::VectorXd& param)
+                        const Eigen::Affine3d& T_ext_chest,
+                        Eigen::VectorXd& q,
+                        Eigen::VectorXd& param)
 {
   param.resize(1);
   q.resize(2);
   double& q1=q(0);
   double& q2=q(1);
 
-  Eigen::Vector3d head_in_chest=T_ext_chest.inverse()* measures_in_ext.head;
+  Eigen::Vector3d head_in_chest=T_ext_chest.inverse() * measures_in_ext.head;
   param(0)=head_in_chest.norm();
 
   q1=std::atan2(-head_in_chest(1),head_in_chest(2));
@@ -359,8 +348,8 @@ void Human28DOF::headIk(const keypoints& measures_in_ext,
     dcosq2=head_in_chest(2)/std::cos(q1);
 
   q2=std::atan2(head_in_chest(0),dcosq2);
-
 }
+
 
 void Human28DOF::ik(const keypoints& measures_in_ext,
                     Eigen::VectorXd& configuration,
@@ -381,8 +370,8 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   Eigen::Affine3d T_ext_rhip;
   Eigen::Affine3d T_ext_lhip;
   Eigen::Affine3d T_ext_chest;
-  trunckIk(measures_in_ext,q_trunk,trunk_param);
-  trunckFk(q_trunk,
+  trunkIk(measures_in_ext,q_trunk,trunk_param);
+  trunkFk(q_trunk,
            trunk_param,
            T_ext_rshoulder,
            T_ext_lshoulder,
@@ -449,14 +438,14 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   Eigen::VectorXd q_right_leg(4);
   Eigen::VectorXd q_left_leg(4);
 
-  rightLimbIk(  relbow_in_rhip,
-                rwrist_in_rhip,
-                leg_param,
-                q_right_leg);
-  leftLimbIk(   lelbow_in_lhip,
-                lwrist_in_lhip,
-                leg_param,
-                q_left_leg);
+  rightLimbIk(relbow_in_rhip,
+              rwrist_in_rhip,
+              leg_param,
+              q_right_leg);
+  leftLimbIk(lelbow_in_lhip,
+             lwrist_in_lhip,
+             leg_param,
+             q_left_leg);
 
 
   configuration.resize(7+3+4*4+2);
@@ -471,8 +460,7 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   param.block(0,0,3,1)=trunk_param;
   param.block(3,0,2,1)=arm_param;
   param.block(5,0,2,1)=leg_param;
-  param.block(6,0,1,1)=head_param;
-
+  param.block(7,0,1,1)=head_param;
 }
 
 
@@ -487,7 +475,7 @@ void Human28DOF::fk(const Eigen::VectorXd& configuration,
   Eigen::VectorXd q_left_leg   = configuration.block(22,0,4,1);
   Eigen::VectorXd q_head       = configuration.block(26,0,2,1);
 
-  Eigen::VectorXd trunck_param = param.block(0,0,3,1);
+  Eigen::VectorXd trunk_param = param.block(0,0,3,1);
   Eigen::VectorXd arm_param    = param.block(3,0,2,1);
   Eigen::VectorXd leg_param    = param.block(5,0,2,1);
   Eigen::VectorXd head_param   = param.block(7,0,1,1);
@@ -499,8 +487,8 @@ void Human28DOF::fk(const Eigen::VectorXd& configuration,
   Eigen::Affine3d T_ext_lhip;
   Eigen::Affine3d T_ext_chest;
   Eigen::Affine3d T_ext_head;
-  trunckFk(q_trunk,
-            trunck_param,
+  trunkFk(q_trunk,
+            trunk_param,
             T_ext_rshoulder,
             T_ext_lshoulder,
             T_ext_rhip,
@@ -523,7 +511,6 @@ void Human28DOF::fk(const Eigen::VectorXd& configuration,
 
   Eigen::Vector3d lelbow_in_lshoulder;
   Eigen::Vector3d lwrist_in_lshoulder;
-
 
   rightLimbFk(q_right_arm,
                 arm_param,
@@ -558,14 +545,12 @@ void Human28DOF::fk(const Eigen::VectorXd& configuration,
   kp_in_ext.right_ankle =T_ext_rhip     *rwrist_in_rhip     ;
   kp_in_ext.left_knee   =T_ext_lhip     *lelbow_in_lhip     ;
   kp_in_ext.left_ankle  =T_ext_lhip     *lwrist_in_lhip     ;
-
 }
 
 double Human28DOF::keypointDistance(const keypoints& kp1_in_ext,
                                     const keypoints& kp2_in_ext,
                                     keypoints& diff_in_ext)
 {
-
   diff_in_ext.head           = kp1_in_ext.head           - kp2_in_ext.head             ;
   diff_in_ext.left_shoulder  = kp1_in_ext.left_shoulder  - kp2_in_ext.left_shoulder    ;
   diff_in_ext.left_elbow     = kp1_in_ext.left_elbow     - kp2_in_ext.left_elbow       ;
@@ -594,6 +579,7 @@ double Human28DOF::keypointDistance(const keypoints& kp1_in_ext,
   distance+=diff_in_ext.right_hip     .norm();
   distance+=diff_in_ext.right_knee    .norm();
   distance+=diff_in_ext.right_ankle   .norm();
+  
   return distance;
 }
 
@@ -616,8 +602,8 @@ std::ostream& operator<<(std::ostream& os, const keypoints& keypoints)
   return os;
 }
 
-void  Human28DOF::print(const Eigen::VectorXd& q,
-                        const Eigen::VectorXd& param)
+void Human28DOF::print(const Eigen::VectorXd& q,
+                       const Eigen::VectorXd& param)
 {
   Eigen::VectorXd q_trunk      = q.block(0,0,10,1) ;
   Eigen::VectorXd q_right_arm  = q.block(10,0,4,1);
@@ -666,10 +652,6 @@ void  Human28DOF::print(const Eigen::VectorXd& q,
 
   std::cout << "head rotz: " << q_head(0) << std::endl;
   std::cout << "head rotx: " << q_head(1) << std::endl << std::endl;
-
-
-
 }
-
 
 }  // end namespace human_model

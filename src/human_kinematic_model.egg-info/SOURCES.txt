@@ -1,5 +1,0 @@
-pyproject.toml
-src/human_kinematic_model.egg-info/PKG-INFO
-src/human_kinematic_model.egg-info/SOURCES.txt
-src/human_kinematic_model.egg-info/dependency_links.txt
-src/human_kinematic_model.egg-info/top_level.txt

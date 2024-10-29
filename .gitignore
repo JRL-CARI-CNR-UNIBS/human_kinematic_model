@@ -44,5 +44,8 @@ Testing/
 
 compile_commands.json
 
+__pycache__/
+.pytest_cache/
+
 # python packaging files
 human_model.egg-info/

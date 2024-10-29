@@ -31,11 +31,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rdyn_core/primitives.h>
 
 
-
-
 namespace human_model
 {
-
 
 
 struct keypoints
@@ -91,11 +88,11 @@ public:
                                  keypoints& diff_in_ext);
 
 
-  static void trunckIk(const keypoints& measures_in_ext,
+  static void trunkIk(const keypoints& measures_in_ext,
                        Eigen::VectorXd& q,
                        Eigen::VectorXd& param);
 
-  static void trunckFk(const Eigen::VectorXd& q,
+  static void trunkFk(const Eigen::VectorXd& q,
                        const Eigen::VectorXd& param,
                        Eigen::Affine3d &T_ext_rshoulder,
                        Eigen::Affine3d &T_ext_lshoulder,

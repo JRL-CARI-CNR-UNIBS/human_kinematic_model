@@ -3,21 +3,87 @@ from scipy.spatial.transform import Rotation as R
 
 
 class Keypoints:
-    def __init__(self, head, left_shoulder, left_elbow, left_wrist, left_hip, left_knee, left_ankle,
-                 right_shoulder, right_elbow, right_wrist, right_hip, right_knee, right_ankle):
+    def __init__(self,
+                 head           = np.zeros(3),
+                 left_shoulder  = np.zeros(3),
+                 left_elbow     = np.zeros(3),
+                 left_wrist     = np.zeros(3),
+                 left_hip       = np.zeros(3),
+                 left_knee      = np.zeros(3),
+                 left_ankle     = np.zeros(3),
+                 right_shoulder = np.zeros(3),
+                 right_elbow    = np.zeros(3),
+                 right_wrist    = np.zeros(3),
+                 right_hip      = np.zeros(3),
+                 right_knee     = np.zeros(3),
+                 right_ankle    = np.zeros(3)):
+        
         self.head = head
-        self.left_shoulder = left_shoulder
-        self.left_elbow = left_elbow
-        self.left_wrist = left_wrist
-        self.left_hip = left_hip
-        self.left_knee = left_knee
-        self.left_ankle = left_ankle
+        self.left_shoulder  = left_shoulder
+        self.left_elbow     = left_elbow
+        self.left_wrist     = left_wrist
+        self.left_hip       = left_hip
+        self.left_knee      = left_knee
+        self.left_ankle     = left_ankle
         self.right_shoulder = right_shoulder
-        self.right_elbow = right_elbow
-        self.right_wrist = right_wrist
-        self.right_hip = right_hip
-        self.right_knee = right_knee
-        self.right_ankle = right_ankle
+        self.right_elbow    = right_elbow
+        self.right_wrist    = right_wrist
+        self.right_hip      = right_hip
+        self.right_knee     = right_knee
+        self.right_ankle    = right_ankle
+
+
+    def set_keypoints(self, keypoints: np.ndarray):
+        self.head           = keypoints[0:3]
+        self.left_shoulder  = keypoints[3:6]
+        self.left_elbow     = keypoints[6:9]
+        self.left_wrist     = keypoints[9:12]
+        self.left_hip       = keypoints[12:15]
+        self.left_knee      = keypoints[15:18]
+        self.left_ankle     = keypoints[18:21]
+        self.right_shoulder = keypoints[21:24]
+        self.right_elbow    = keypoints[24:27]
+        self.right_wrist    = keypoints[27:30]
+        self.right_hip      = keypoints[30:33]
+        self.right_knee     = keypoints[33:36]
+        self.right_ankle    = keypoints[36:39]
+
+
+    @staticmethod
+    def keypoint_distance(kp1_in_ext, kp2_in_ext):
+        diff_in_ext = Keypoints()
+
+        diff_in_ext.head = kp1_in_ext.head - kp2_in_ext.head
+        diff_in_ext.left_shoulder = kp1_in_ext.left_shoulder - kp2_in_ext.left_shoulder
+        diff_in_ext.left_elbow = kp1_in_ext.left_elbow - kp2_in_ext.left_elbow
+        diff_in_ext.left_wrist = kp1_in_ext.left_wrist - kp2_in_ext.left_wrist
+        diff_in_ext.left_hip = kp1_in_ext.left_hip - kp2_in_ext.left_hip
+        diff_in_ext.left_knee = kp1_in_ext.left_knee - kp2_in_ext.left_knee
+        diff_in_ext.left_ankle = kp1_in_ext.left_ankle - kp2_in_ext.left_ankle
+        diff_in_ext.right_shoulder = kp1_in_ext.right_shoulder - kp2_in_ext.right_shoulder
+        diff_in_ext.right_elbow = kp1_in_ext.right_elbow - kp2_in_ext.right_elbow
+        diff_in_ext.right_wrist = kp1_in_ext.right_wrist - kp2_in_ext.right_wrist
+        diff_in_ext.right_hip = kp1_in_ext.right_hip - kp2_in_ext.right_hip
+        diff_in_ext.right_knee = kp1_in_ext.right_knee - kp2_in_ext.right_knee
+        diff_in_ext.right_ankle = kp1_in_ext.right_ankle - kp2_in_ext.right_ankle
+
+        distance = 0.0
+        distance += np.linalg.norm(diff_in_ext.head)
+        distance += np.linalg.norm(diff_in_ext.left_shoulder)
+        distance += np.linalg.norm(diff_in_ext.left_elbow)
+        distance += np.linalg.norm(diff_in_ext.left_wrist)
+        distance += np.linalg.norm(diff_in_ext.left_hip)
+        distance += np.linalg.norm(diff_in_ext.left_knee)
+        distance += np.linalg.norm(diff_in_ext.left_ankle)
+        distance += np.linalg.norm(diff_in_ext.right_shoulder)
+        distance += np.linalg.norm(diff_in_ext.right_elbow)
+        distance += np.linalg.norm(diff_in_ext.right_wrist)
+        distance += np.linalg.norm(diff_in_ext.right_hip)
+        distance += np.linalg.norm(diff_in_ext.right_knee)
+        distance += np.linalg.norm(diff_in_ext.right_ankle)
+
+        return distance, diff_in_ext
+    
 
     def __str__(self):
         return (f"head            = {self.head.T}\n"
@@ -86,7 +152,7 @@ class HumanProcess:
         self.x = x
 
 
-    def trunck_fk(self, q, param):
+    def trunk_fk(self, q, param):
         shoulder_rotx = q[7]
         hip_rotz = q[8]
         hip_rotx = q[9]
@@ -120,10 +186,10 @@ class HumanProcess:
         # Transformation matrix from lshoulder0 frame to left shoulder frame
         T_lshoulder0_lshoulder = np.eye(4)
         T_lshoulder0_lshoulder[:3, 3] = np.array([0, 0, 0.5 * shoulder_distance])
-        T_sholder_lshoulder = T_shoulder_lshoulder0 @ T_lshoulder0_lshoulder
+        T_shoulder_lshoulder = T_shoulder_lshoulder0 @ T_lshoulder0_lshoulder
 
         # Transformation matrix from chest frame to lshoulder and rshoulder frame
-        T_ext_lshoulder = T_ext_chest @ T_chest_shoulder @ T_sholder_lshoulder
+        T_ext_lshoulder = T_ext_chest @ T_chest_shoulder @ T_shoulder_lshoulder
         T_ext_rshoulder = T_ext_chest @ T_chest_shoulder @ T_shoulder_rshoulder
 
         # Transformation matrix from chest frame to hip frame 0
@@ -233,20 +299,20 @@ class HumanProcess:
         q_head = q[26:28]
 
         # Body parameters
-        trunck_param = param[0:3]
+        trunk_param = param[0:3]
         arm_param = param[3:5]
         leg_param = param[5:7]
         head_param = param[7]
 
-        # Trunck forward kinematics
+        # trunk forward kinematics
         T_ext_rshoulder, T_ext_lshoulder, \
             T_ext_rhip, T_ext_lhip, \
-                T_ext_chest = self.trunck_fk(q_trunk, trunck_param)
+                T_ext_chest = self.trunk_fk(q_trunk, trunk_param)
 
         # Head forward kinematics
         T_ext_head = self.head_fk(q_head, head_param, T_ext_chest)
 
-        # Extract head and trunck keypoints
+        # Extract head and trunk keypoints
         keypoints = {}
         keypoints["head"] = T_ext_head[:3, 3]
         keypoints["right_shoulder"] = T_ext_rshoulder[:3, 3]
@@ -337,88 +403,92 @@ class HumanProcess:
         return self.right_limb_ik(mirror_elbow_in_limb, mirror_wrist_in_limb, param) 
 
 
-    def trunk_ik(self, measures_in_ext):
-            q = np.zeros(10)
-            param = np.zeros(3)
+    def trunk_ik(self, measures_in_ext: Keypoints):
+        q = np.zeros(10)
+        param = np.zeros(3)
 
-            shoulder_rotx = q[7]
-            hip_rotz = q[8]
-            hip_rotx = q[9]
-            shoulder_distance = param[0]
-            chest_hip_distance = param[1]
-            hip_distance = param[2]
+        shoulder_rotx = q[7]
+        hip_rotz = q[8]
+        hip_rotx = q[9]
+        shoulder_distance = param[0]
+        chest_hip_distance = param[1]
+        hip_distance = param[2]
 
-            upper_chest = 0.5 * (measures_in_ext['left_shoulder'] + measures_in_ext['right_shoulder'])
-            lower_chest = 0.5 * (measures_in_ext['left_hip'] + measures_in_ext['right_hip'])
-            hip_versor_in_ext = (measures_in_ext['left_hip'] - measures_in_ext['right_hip']) / np.linalg.norm(measures_in_ext['left_hip'] - measures_in_ext['right_hip'])
-            chest_z_in_ext = (upper_chest - lower_chest) / np.linalg.norm(upper_chest - lower_chest)
-            shoulder_versor_in_ext = (measures_in_ext['left_shoulder'] - measures_in_ext['right_shoulder']) / np.linalg.norm(measures_in_ext['left_shoulder'] - measures_in_ext['right_shoulder'])
+        upper_chest = 0.5 * (measures_in_ext.left_shoulder + measures_in_ext.right_shoulder)
+        lower_chest = 0.5 * (measures_in_ext.left_hip + measures_in_ext.right_hip)
+        
+        chest_z_in_ext = (upper_chest - lower_chest) / np.linalg.norm(upper_chest - lower_chest)  
+        hip_versor_in_ext = (measures_in_ext.left_hip - measures_in_ext.right_hip) / \
+            np.linalg.norm(measures_in_ext.left_hip - measures_in_ext.right_hip)
+        shoulder_versor_in_ext = (measures_in_ext.left_shoulder - measures_in_ext.right_shoulder) / \
+            np.linalg.norm(measures_in_ext.left_shoulder - measures_in_ext.right_shoulder)
 
-            shoulder_distance = np.linalg.norm(measures_in_ext['left_shoulder'] - measures_in_ext['right_shoulder'])
-            chest_hip_distance = np.linalg.norm(upper_chest - lower_chest)
-            hip_distance = np.linalg.norm(measures_in_ext['left_hip'] - measures_in_ext['right_hip'])
+        shoulder_distance = np.linalg.norm(measures_in_ext.left_shoulder - measures_in_ext.right_shoulder)
+        chest_hip_distance = np.linalg.norm(upper_chest - lower_chest)
+        hip_distance = np.linalg.norm(measures_in_ext.left_hip - measures_in_ext.right_hip)
 
-            chest_y_in_ext = shoulder_versor_in_ext - np.dot(shoulder_versor_in_ext, chest_z_in_ext) * chest_z_in_ext
-            chest_y_in_ext /= np.linalg.norm(chest_y_in_ext)
+        chest_y_in_ext = shoulder_versor_in_ext - np.dot(shoulder_versor_in_ext, chest_z_in_ext) * chest_z_in_ext
+        chest_y_in_ext /= np.linalg.norm(chest_y_in_ext)
 
-            chest_x_in_ext = np.cross(chest_y_in_ext, chest_z_in_ext)
+        chest_x_in_ext = np.cross(chest_y_in_ext, chest_z_in_ext)
 
-            chest_rot = np.column_stack((chest_x_in_ext, chest_y_in_ext, chest_z_in_ext))
-            chest_q = R.from_matrix(chest_rot).as_quat()
+        chest_rot = np.column_stack((chest_x_in_ext, chest_y_in_ext, chest_z_in_ext))
+        chest_q = R.from_matrix(chest_rot).as_quat()
 
-            T_ext_chest = np.eye(4)
-            T_ext_chest[:3, :3] = chest_rot
-            T_ext_chest[:3, 3] = upper_chest
+        T_ext_chest = np.eye(4)
+        T_ext_chest[:3, :3] = chest_rot
+        T_ext_chest[:3, 3] = upper_chest
 
-            q[:3] = upper_chest
-            q[3:7] = chest_q
+        q[:3] = upper_chest
+        q[3:7] = chest_q
 
-            shoulder_versor_in_chest = np.linalg.inv(T_ext_chest[:3, :3]) @ shoulder_versor_in_ext
-            shoulder_rotx = np.arctan2(shoulder_versor_in_chest[2], shoulder_versor_in_chest[1])
+        shoulder_versor_in_chest = np.linalg.inv(T_ext_chest[:3, :3]) @ shoulder_versor_in_ext
+        shoulder_rotx = np.arctan2(shoulder_versor_in_chest[2], shoulder_versor_in_chest[1])
 
-            hip_versor_in_chest = np.linalg.inv(T_ext_chest[:3, :3]) @ hip_versor_in_ext
-            hip_rotz = np.arctan2(-hip_versor_in_chest[0], hip_versor_in_chest[1])
+        hip_versor_in_chest = np.linalg.inv(T_ext_chest[:3, :3]) @ hip_versor_in_ext
+        hip_rotz = np.arctan2(-hip_versor_in_chest[0], hip_versor_in_chest[1])
 
-            if np.abs(np.sin(hip_rotz)) > 0.5:
-                cosq2 = -hip_versor_in_chest[0] / np.sin(hip_rotz)
-            else:
-                cosq2 = hip_versor_in_chest[1] / np.cos(hip_rotz)
+        if np.abs(np.sin(hip_rotz)) > 0.5:
+            cosq2 = -hip_versor_in_chest[0] / np.sin(hip_rotz)
+        else:
+            cosq2 = hip_versor_in_chest[1] / np.cos(hip_rotz)
 
-            hip_rotx = np.arctan2(hip_versor_in_chest[2], cosq2)
+        hip_rotx = np.arctan2(hip_versor_in_chest[2], cosq2)
 
-            q[7] = shoulder_rotx
-            q[8] = hip_rotz
-            q[9] = hip_rotx
+        q[7] = shoulder_rotx
+        q[8] = hip_rotz
+        q[9] = hip_rotx
 
-            param[0] = shoulder_distance
-            param[1] = chest_hip_distance
-            param[2] = hip_distance
+        param[0] = shoulder_distance
+        param[1] = chest_hip_distance
+        param[2] = hip_distance
 
-            return q, param
+        return q, param
     
 
-    def head_ik(self, measures_in_ext, T_ext_chest):
-            param = np.zeros(1)
-            q = np.zeros(2)
+    def head_ik(self, measures_in_ext: Keypoints, T_ext_chest):
+        param = np.zeros(1)
+        q = np.zeros(2)
 
-            head_in_chest = np.linalg.inv(T_ext_chest) @ measures_in_ext['head']
-            param[0] = np.linalg.norm(head_in_chest)
+        head_in_ext = np.concatenate([measures_in_ext.head, np.array([1])])
+        head_in_chest = np.linalg.inv(T_ext_chest) @ head_in_ext
+        param[0] = np.linalg.norm(head_in_chest)
 
-            q1 = np.arctan2(-head_in_chest[1], head_in_chest[2])
-            if np.abs(np.sin(q1)) > 0.5:
-                dcosq2 = -head_in_chest[1] / np.sin(q1)
-            else:
-                dcosq2 = head_in_chest[2] / np.cos(q1)
+        q1 = np.arctan2(-head_in_chest[1], head_in_chest[2])
+        if np.abs(np.sin(q1)) > 0.5:
+            dcosq2 = -head_in_chest[1] / np.sin(q1)
+        else:
+            dcosq2 = head_in_chest[2] / np.cos(q1)
 
-            q2 = np.arctan2(head_in_chest[0], dcosq2)
+        q2 = np.arctan2(head_in_chest[0], dcosq2)
 
-            q[0] = q1
-            q[1] = q2
+        q[0] = q1
+        q[1] = q2
 
-            return q, param
+        return q, param
 
 
-    def inverse_kinematics(self, measures_in_ext):
+    def inverse_kinematics(self, measures_in_ext: Keypoints):
         # 7 dof for chest (tra+quat)
         # 1 dof: shoulder rotation is the rotation around chest_x_in_ext (frontal direction)
         # 1 dof for trunk rotation (around chest_z)
@@ -427,52 +497,68 @@ class HumanProcess:
         # 6 dof for each limb: 3 dof shoulder, 1 dof length of the upper arm, 1 dof elbow rotation, 1 dof length of the lower arm
         q_trunk, trunk_param = self.trunk_ik(measures_in_ext)
 
-        T_ext_rshoulder, T_ext_lshoulder, T_ext_rhip, T_ext_lhip, T_ext_chest = self.trunk_fk(q_trunk, trunk_param)
+        T_ext_rshoulder, T_ext_lshoulder, \
+        T_ext_rhip, T_ext_lhip, \
+        T_ext_chest = \
+            self.trunk_fk(q_trunk, trunk_param)
 
         q_head, head_param = self.head_ik(measures_in_ext, T_ext_chest)
 
         upper_arm_length = 0.5 * (
-            np.linalg.norm(measures_in_ext['right_elbow'] - measures_in_ext['right_shoulder']) +
-            np.linalg.norm(measures_in_ext['left_elbow'] - measures_in_ext['left_shoulder'])
+            np.linalg.norm(measures_in_ext.right_elbow - measures_in_ext.right_shoulder) +
+            np.linalg.norm(measures_in_ext.left_elbow - measures_in_ext.left_shoulder)
         )
 
         lower_arm_length = 0.5 * (
-            np.linalg.norm(measures_in_ext['right_elbow'] - measures_in_ext['right_wrist']) +
-            np.linalg.norm(measures_in_ext['left_elbow'] - measures_in_ext['left_wrist'])
+            np.linalg.norm(measures_in_ext.right_elbow - measures_in_ext.right_wrist) +
+            np.linalg.norm(measures_in_ext.left_elbow - measures_in_ext.left_wrist)
         )
 
         upper_leg_length = 0.5 * (
-            np.linalg.norm(measures_in_ext['right_knee'] - measures_in_ext['right_hip']) +
-            np.linalg.norm(measures_in_ext['left_knee'] - measures_in_ext['left_hip'])
+            np.linalg.norm(measures_in_ext.right_knee - measures_in_ext.right_hip) +
+            np.linalg.norm(measures_in_ext.left_knee - measures_in_ext.left_hip)
         )
 
         lower_leg_length = 0.5 * (
-            np.linalg.norm(measures_in_ext['right_knee'] - measures_in_ext['right_ankle']) +
-            np.linalg.norm(measures_in_ext['left_knee'] - measures_in_ext['left_ankle'])
+            np.linalg.norm(measures_in_ext.right_knee - measures_in_ext.right_ankle) +
+            np.linalg.norm(measures_in_ext.left_knee - measures_in_ext.left_ankle)
         )
 
         arm_param = np.array([upper_arm_length, lower_arm_length])
         leg_param = np.array([upper_leg_length, lower_leg_length])
 
-        relbow_in_rshoulder = np.linalg.inv(T_ext_rshoulder) @ measures_in_ext['right_elbow']
-        rwrist_in_rshoulder = np.linalg.inv(T_ext_rshoulder) @ measures_in_ext['right_wrist']
+        relbow_in_ext = np.concatenate([measures_in_ext.right_elbow, np.array([1])])
+        relbow_in_rshoulder = np.linalg.inv(T_ext_rshoulder) @ relbow_in_ext
 
-        lelbow_in_lshoulder = np.linalg.inv(T_ext_lshoulder) @ measures_in_ext['left_elbow']
-        lwrist_in_lshoulder = np.linalg.inv(T_ext_lshoulder) @ measures_in_ext['left_wrist']
+        rwrist_in_ext = np.concatenate([measures_in_ext.right_wrist, np.array([1])])
+        rwrist_in_rshoulder = np.linalg.inv(T_ext_rshoulder) @ rwrist_in_ext
+
+        lelbow_in_ext = np.concatenate([measures_in_ext.left_elbow, np.array([1])])
+        lelbow_in_lshoulder = np.linalg.inv(T_ext_lshoulder) @ lelbow_in_ext
+
+        lwrist_in_ext = np.concatenate([measures_in_ext.left_wrist, np.array([1])])
+        lwrist_in_lshoulder = np.linalg.inv(T_ext_lshoulder) @ lwrist_in_ext
 
         q_right_arm = self.right_limb_ik(relbow_in_rshoulder, rwrist_in_rshoulder, arm_param)
         q_left_arm = self.left_limb_ik(lelbow_in_lshoulder, lwrist_in_lshoulder, arm_param)
 
-        relbow_in_rhip = np.linalg.inv(T_ext_rhip) @ measures_in_ext['right_knee']
-        rwrist_in_rhip = np.linalg.inv(T_ext_rhip) @ measures_in_ext['right_ankle']
+        rknee_in_ext = np.concatenate([measures_in_ext.right_knee, np.array([1])])
+        rknee_in_rhip = np.linalg.inv(T_ext_rhip) @ rknee_in_ext
 
-        lelbow_in_lhip = np.linalg.inv(T_ext_lhip) @ measures_in_ext['left_knee']
-        lwrist_in_lhip = np.linalg.inv(T_ext_lhip) @ measures_in_ext['left_ankle']
+        rankle_in_ext = np.concatenate([measures_in_ext.right_ankle, np.array([1])])
+        rankle_in_rhip = np.linalg.inv(T_ext_rhip) @ rankle_in_ext
 
-        q_right_leg = self.right_limb_ik(relbow_in_rhip, rwrist_in_rhip, leg_param)
-        q_left_leg = self.left_limb_ik(lelbow_in_lhip, lwrist_in_lhip, leg_param)
+        lknee_in_ext = np.concatenate([measures_in_ext.left_knee, np.array([1])])
+        lknee_in_lhip = np.linalg.inv(T_ext_lhip) @ lknee_in_ext
 
-        configuration = np.concatenate([q_trunk, q_right_arm, q_left_arm, q_right_leg, q_left_leg, q_head])
+        lankle_in_ext = np.concatenate([measures_in_ext.left_ankle, np.array([1])])
+        lankle_in_lhip = np.linalg.inv(T_ext_lhip) @ lankle_in_ext
+
+        q_right_leg = self.right_limb_ik(rknee_in_rhip, rankle_in_rhip, leg_param)
+        q_left_leg = self.left_limb_ik(lknee_in_lhip, lankle_in_lhip, leg_param)
+
+        configuration = np.concatenate([q_trunk, q_right_arm, q_left_arm,
+                                        q_right_leg, q_left_leg, q_head])
         param = np.concatenate([trunk_param, arm_param, leg_param, head_param])
 
         return configuration, param
