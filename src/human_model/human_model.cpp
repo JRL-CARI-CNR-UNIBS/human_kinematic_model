@@ -146,8 +146,8 @@ void  Human28DOF::leftLimbFk(const Eigen::VectorXd& qarm,
 
 
 void Human28DOF::trunkIk(const keypoints& measures_in_ext,
-                          Eigen::VectorXd& q,
-                          Eigen::VectorXd& param)
+                         Eigen::VectorXd& q,
+                         Eigen::VectorXd& param)
 {
   q.resize(7+3);
   param.resize(3);
@@ -213,13 +213,13 @@ void Human28DOF::trunkIk(const keypoints& measures_in_ext,
 }
 
 
-void Human28DOF::trunkFk(const Eigen::VectorXd &q,
-                               const Eigen::VectorXd &param,
-                               Eigen::Affine3d& T_ext_rshoulder,
-                               Eigen::Affine3d& T_ext_lshoulder,
-                               Eigen::Affine3d& T_ext_rhip,
-                               Eigen::Affine3d& T_ext_lhip,
-                               Eigen::Affine3d& T_ext_chest)
+void Human28DOF::trunkFk(const Eigen::VectorXd& q,
+                         const Eigen::VectorXd& param,
+                         Eigen::Affine3d& T_ext_rshoulder,
+                         Eigen::Affine3d& T_ext_lshoulder,
+                         Eigen::Affine3d& T_ext_rhip,
+                         Eigen::Affine3d& T_ext_lhip,
+                         Eigen::Affine3d& T_ext_chest)
 {
   const double& shoulder_rotx=q(7);
   const double& hip_rotz=q(8);
@@ -228,55 +228,68 @@ void Human28DOF::trunkFk(const Eigen::VectorXd &q,
   const double& chest_hip_distance=param(1);
   const double& hip_distance=param(2);
 
-  // chest reference frame:
-
+  // CHEST REFERENCE FRAME:
+  // chest orientation (quaternion in scalar-last form)
   Eigen::Quaterniond chest_q;
   chest_q.coeffs()=q.block(3,0,4,1);
-
   T_ext_chest=chest_q;
+
+  // 3D position of the chest
   T_ext_chest.translation()=q.block(0,0,3,1);
 
+  // ROTATED CHEST REFERENCE FRAME:
+  // T_chest_shoulder rotation around x axis of the chest by shoulder_rotx radians
   Eigen::Affine3d T_chest_shoulder;
   T_chest_shoulder=Eigen::AngleAxisd(shoulder_rotx,Eigen::Vector3d::UnitX());
 
-  // rshoulder reference frame:
-  // rshoulder_z axis parallel to shoulder_versor_in_ext
-  // rshoulder_y axis up
-  // rshoulder_x axis "align" to chest_x_axis
-  // T_chest_rshoulder = rotx(pi/2) followed by  tranz(-0.5*shoulder_distance)
+  // RIGHT SHOULDER REFERENCE FRAME:
+  // rshoulder_z axis along the line connecting the shoulders
+  // rshoulder_y axis downwards
+  // rshoulder_x axis aligned to chest_x_axis
 
-  // T_shoulder_rshoulder0: rotation of the axis to have z pointing the body center
+  // T_shoulder_rshoulder0: rotation of the axis to have z pointing the the body center
   Eigen::Affine3d T_shoulder_rshoulder0;
   T_shoulder_rshoulder0=Eigen::AngleAxisd(-M_PI*0.5,Eigen::Vector3d::UnitX());
 
-  // T_shoulder0_rshoulder: translation to have the origin in the middle of the shoulder
+  // T_rshoulder0_rshoulder: translation to have the origin in the shoulder center
   Eigen::Affine3d T_rshoulder0_rshoulder;
   T_rshoulder0_rshoulder.setIdentity();
   T_rshoulder0_rshoulder.translation()=-Eigen::Vector3d::UnitZ()*0.5*shoulder_distance;
 
+  // Combine the two transformations
+  // T_shoulder_rshoulder = rotx(pi/2) followed by trans(-0.5*shoulder_distance)
   Eigen::Affine3d T_shoulder_rshoulder=T_shoulder_rshoulder0*T_rshoulder0_rshoulder;
 
-
-  // lshoulder reference frame (it will be flipped in the left_limb_ik and left_limb_fk):
-  // lshoulder_z axis parallel to shoulder_versor_in_ext
-  // lshoulder_y axis up
+  // Express wrt the external frame
+  T_ext_rshoulder=T_ext_chest*T_chest_shoulder*T_shoulder_rshoulder;
+  
+  // LEFT SHOULDER REFERENCE FRAME:
+  // (flipped in the left_limb_ik and left_limb_fk wrt the right one)
+  // lshoulder_z axis along the line connecting the shoulders
+  // lshoulder_y axis downwards
   // lshoulder_x axis "opposite" to chest_x_axis
-  // T_chest_lshoulder = rotx(pi/2) followed by  tranz(-0.5*shoulder_distance)
-  Eigen::Affine3d T_shoulder_lshoulder0;
-  T_shoulder_lshoulder0=Eigen::AngleAxisd(-M_PI*0.5,Eigen::Vector3d::UnitX());
+ 
+  // T_shoulder_lshoulder0: same as T_shoulder_rshoulder0
+  Eigen::Affine3d T_shoulder_lshoulder0(T_shoulder_rshoulder0);
+  // REMOVE: T_shoulder_lshoulder0=Eigen::AngleAxisd(-M_PI*0.5,Eigen::Vector3d::UnitX());
 
+  // T_lshoulder0_lshoulder: translation to have the origin in the shoulder center
   Eigen::Affine3d T_lshoulder0_lshoulder;
   T_lshoulder0_lshoulder.setIdentity();
   T_lshoulder0_lshoulder.translation()=Eigen::Vector3d::UnitZ()*0.5*shoulder_distance;
+  
+  // Combine the two transformations
+  // T_shoulder_lshoulder = rotx(pi/2) followed by trans(0.5*shoulder_distance)
   Eigen::Affine3d T_shoulder_lshoulder=T_shoulder_lshoulder0*T_lshoulder0_lshoulder;
 
-  Eigen::Vector3d shoulder_versor_in_chest=(T_chest_shoulder).linear()*Eigen::Vector3d::UnitY();
-
-
+  // Express wrt the external frame
   T_ext_lshoulder=T_ext_chest*T_chest_shoulder*T_shoulder_lshoulder;
-  T_ext_rshoulder=T_ext_chest*T_chest_shoulder*T_shoulder_rshoulder;
 
 
+  // DEBUG: Eigen::Vector3d shoulder_versor_in_chest=(T_chest_shoulder).linear()*Eigen::Vector3d::UnitY();
+
+
+  // HIP REFERENCE FRAME:
   Eigen::Affine3d T_chest_hip0;
   T_chest_hip0.setIdentity();
   T_chest_hip0.translation()(2)=-chest_hip_distance;
@@ -286,8 +299,10 @@ void Human28DOF::trunkFk(const Eigen::VectorXd &q,
   Eigen::Affine3d T_hip1_hip2;
   T_hip1_hip2=Eigen::AngleAxisd(hip_rotx,Eigen::Vector3d::UnitX());
 
-  Eigen::Vector3d hip_versor_in_chest=(T_chest_hip0*T_chest_hip0*T_hip0_hip1*T_hip1_hip2).linear()*Eigen::Vector3d::UnitY();
+  // DEBUG: Eigen::Vector3d hip_versor_in_chest=(T_chest_hip0*T_chest_hip0*T_hip0_hip1*T_hip1_hip2).linear()*Eigen::Vector3d::UnitY();
 
+
+  // RIGHT HIP REFERENCE FRAME:
   Eigen::Affine3d T_hip2_rhip3;
   T_hip2_rhip3=Eigen::AngleAxisd(-M_PI*0.5,Eigen::Vector3d::UnitX());
 
@@ -295,8 +310,10 @@ void Human28DOF::trunkFk(const Eigen::VectorXd &q,
   T_rhip3_rhip.setIdentity();
   T_rhip3_rhip.translation()(2)-=0.5*hip_distance;
 
-  Eigen::Affine3d T_hip2_lhip3;
-  T_hip2_lhip3=Eigen::AngleAxisd(-M_PI*0.5,Eigen::Vector3d::UnitX());
+  // LEFT HIP REFERENCE FRAME:
+  // T_hip2_lhip3: same as T_hip2_rhip3
+  Eigen::Affine3d T_hip2_lhip3(T_hip2_rhip3);
+  // T_hip2_lhip3=Eigen::AngleAxisd(-M_PI*0.5,Eigen::Vector3d::UnitX());
 
   Eigen::Affine3d T_lhip3_lhip;
   T_lhip3_lhip.setIdentity();

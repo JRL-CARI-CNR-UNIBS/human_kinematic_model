@@ -46,22 +46,83 @@ def test_trunk_fk():
     # === Symbolic computation ===
     # Define array composed of N_DOF symbols with given names
     symbol_names = [f'q{i}' for i in range(N_DOF)]
-    q = sym.symbols(symbol_names)    
+    q = sym.symbols(symbol_names)
 
-    # Define transformation matrices
+    # Define array of parameters based on the names in PARAM
+    param_names = ['shoulder_distance', 'chest_hip_distance', 'hip_distance',
+                   'upper_arm_length', 'lower_arm_length', 'upper_leg_length',
+                   'lower_leg_length', 'head_distance']
+    param = sym.symbols(param_names)
+
+    # Define a dictionary with the symbols and parameters used for substitution
+    q_param_dict = {**{q[i]: Q[i] for i in range(N_DOF)},
+                    **{param[i]: PARAM[i] for i in range(N_PARAM)}}
+
+
+    # CHEST REFERENCE FRAME:
     chest_q = sym.Quaternion(a=q[6], b=q[3], c=q[4], d=q[5]) # scalar-first convention
     TExtChest = sym.eye(4)
     TExtChest[:3, :3] = chest_q.to_rotation_matrix()
     TExtChest[:3, 3] = q[0:3]
  
     TExtChest_val = np.array(
-        TExtChest.subs({q[i]: Q[i] for i in range(N_DOF)})).astype(float)
+        TExtChest.subs(q_param_dict)).astype(float)
     
     print(f"\nTExtChest_val = \n{TExtChest_val}")
     print(f"\nT_ext_chest = \n{T_ext_chest}")
 
     assert np.allclose(TExtChest_val, T_ext_chest, atol=1e-8), \
         "T_ext_chest matrix computed by FK is not equal to symbolic computation"
+
+
+    # ROTATED CHEST REFERENCE FRAME:
+    shoulder_rotx = q[7]
+    TChestShoulder = sym.eye(4)
+    TChestShoulder[:3, :3] = sym.rot_axis1(-shoulder_rotx) # "-" because sympy expresses rotations in opposite direction
+
+
+    # RIGHT SHOULDER REFERENCE FRAME:
+    # Rotation around x-axis
+    TShoulderRshoulder0 = sym.eye(4)
+    TShoulderRshoulder0[:3, :3] = sym.rot_axis1(sym.pi/2) # "-" because sympy expresses rotations in opposite direction
+
+    # Translation along z-axis
+    TRshoulder0Rshoulder = sym.eye(4)
+    TRshoulder0Rshoulder[2, 3] = -0.5 * param[0]
+
+    # Combine the transformations
+    TExtRshoulder = TExtChest @ TChestShoulder @ TShoulderRshoulder0 @ TRshoulder0Rshoulder
+    TExtRshoulder_val = np.array(
+        TExtRshoulder.subs(q_param_dict)).astype(float)
+    
+    print(f"\nTExtRshoulder_val = \n{TExtRshoulder_val}")
+    print(f"\nT_ext_rshoulder = \n{T_ext_rshoulder}")
+
+    assert np.allclose(TExtRshoulder_val, T_ext_rshoulder, atol=1e-8), \
+        "T_ext_rshoulder matrix computed by FK is not equal to symbolic computation"
+
+
+    # LEFT SHOULDER REFERENCE FRAME:
+    # Rotation around x-axis
+    TShoulderLshoulder0 = sym.eye(4)
+    TShoulderLshoulder0[:3, :3] = sym.rot_axis1(sym.pi/2) # "-" because sympy expresses rotations in opposite direction
+
+    # Translation along z-axis
+    TLshoulder0Lshoulder = sym.eye(4)
+    TLshoulder0Lshoulder[2, 3] = 0.5 * param[0]
+
+    # Combine the transformations
+    TExtLshoulder = TExtChest @ TChestShoulder @ TShoulderLshoulder0 @ TLshoulder0Lshoulder
+    TExtLshoulder_val = np.array(
+        TExtLshoulder.subs(q_param_dict)).astype(float)
+    
+    print(f"\nTExtLshoulder_val = \n{TExtLshoulder_val}")
+    print(f"\nT_ext_lshoulder = \n{T_ext_lshoulder}")
+
+    assert np.allclose(TExtLshoulder_val, T_ext_lshoulder, atol=1e-8), \
+        "T_ext_lshoulder matrix computed by FK is not equal to symbolic computation"
+    
+
 
 
     # q0 = sym.symbols('q0') # shoulder_rotx
