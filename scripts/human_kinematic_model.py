@@ -214,8 +214,8 @@ class HumanProcess:
         T_lhip3_lhip = np.eye(4)
         T_lhip3_lhip[2, 3] = 0.5 * hip_distance
 
-        T_ext_lhip = T_ext_chest @ T_chest_hip0 @ T_hip0_hip1 @ T_hip1_hip2 @ T_hip2_lhip3 @ T_lhip3_lhip
         T_ext_rhip = T_ext_chest @ T_chest_hip0 @ T_hip0_hip1 @ T_hip1_hip2 @ T_hip2_rhip3 @ T_rhip3_rhip
+        T_ext_lhip = T_ext_chest @ T_chest_hip0 @ T_hip0_hip1 @ T_hip1_hip2 @ T_hip2_lhip3 @ T_lhip3_lhip
 
         return T_ext_rshoulder, T_ext_lshoulder, T_ext_rhip, T_ext_lhip, T_ext_chest
 
@@ -232,13 +232,16 @@ class HumanProcess:
 
         # Transformation matrix from head0 frame to head1 frame
         T_head0_head1 = np.eye(4)
-        T_head0_head1[:3, :3] = R.from_euler('x', q2).as_matrix()
+        T_head0_head1[:3, :3] = R.from_euler('y', q2).as_matrix()
 
         # Transformation matrix from head1 frame to head frame
         T_head1_head = np.eye(4)
-        T_head1_head[3, 3] = distance
+        T_head1_head[2, 3] = distance
 
-        T_ext_head = T_ext_chest * T_chest_head0 * T_head0_head1 * T_head1_head
+        T_ext_head = T_ext_chest @ T_chest_head0 @ T_head0_head1 @ T_head1_head
+        
+        # Check if T_ext_head is a rotation matrix
+        assert np.allclose(np.linalg.det(T_ext_head), 1.0), "T_ext_head is not a rotation matrix"
 
         return T_ext_head 
 
@@ -425,7 +428,7 @@ class HumanProcess:
         chest_x_in_ext = np.cross(chest_y_in_ext, chest_z_in_ext)
 
         chest_rot = np.column_stack((chest_x_in_ext, chest_y_in_ext, chest_z_in_ext))
-        chest_q = R.from_matrix(chest_rot).as_quat()
+        chest_q = R.from_matrix(chest_rot).as_quat() # type: ignore
 
         T_ext_chest = np.eye(4)
         T_ext_chest[:3, :3] = chest_rot
