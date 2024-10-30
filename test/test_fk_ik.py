@@ -15,7 +15,10 @@ def test_kinematic():
     n_dof = 7+3+4*4+2
     n_param = 3+2+2+1
 
-    for _ in range(10**4):
+    for idx in range(10**4):
+        print("\n============================================================")
+        print("idx: ", idx)
+
         q = np.random.rand(n_dof)
 
         # Normalize quaternion corresponding to the rotation of the chest
@@ -42,6 +45,9 @@ def test_kinematic():
         kp_in_ext.set_keypoints(kpts)
 
         q2, param2 = model.inverse_kinematics(kp_in_ext)
+
+        print("q2 [before fk]: ", q2)
+        print("param2 [before fk]: ", param2)
 
         kpts2 = model.forward_kinematics(q2, param2)
         kp_in_ext2 = Keypoints()

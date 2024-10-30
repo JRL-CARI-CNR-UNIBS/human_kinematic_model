@@ -372,12 +372,12 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   Eigen::Affine3d T_ext_chest;
   trunkIk(measures_in_ext,q_trunk,trunk_param);
   trunkFk(q_trunk,
-           trunk_param,
-           T_ext_rshoulder,
-           T_ext_lshoulder,
-           T_ext_rhip,
-           T_ext_lhip,
-           T_ext_chest);
+          trunk_param,
+          T_ext_rshoulder,
+          T_ext_lshoulder,
+          T_ext_rhip,
+          T_ext_lhip,
+          T_ext_chest);
 
   Eigen::VectorXd q_head(2);
   Eigen::VectorXd head_param(1);
@@ -421,13 +421,13 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   Eigen::VectorXd q_left_arm(4);
 
   rightLimbIk(relbow_in_rshoulder,
-                rwrist_in_rshoulder,
-                arm_param,
-                q_right_arm);
-  leftLimbIk( lelbow_in_lshoulder,
-                lwrist_in_lshoulder,
-                arm_param,
-                q_left_arm);
+              rwrist_in_rshoulder,
+              arm_param,
+              q_right_arm);
+  leftLimbIk(lelbow_in_lshoulder,
+             lwrist_in_lshoulder,
+             arm_param,
+             q_left_arm);
 
   Eigen::Vector3d relbow_in_rhip=T_ext_rhip.inverse()*measures_in_ext.right_knee;
   Eigen::Vector3d rwrist_in_rhip=T_ext_rhip.inverse()*measures_in_ext.right_ankle;

@@ -19,6 +19,10 @@ int main(int argc, char *argv[])
 
   for (size_t idx=0; idx<1e4 ;idx++)
   {
+    std::cout << std::endl << "=======================================";
+    std::cout << "=======================================" << std::endl;
+    std::cout << "idx: " << idx << std::endl;
+
     q.setRandom();
     q.block(3,0,4,1)/=q.block(3,0,4,1).norm();
 

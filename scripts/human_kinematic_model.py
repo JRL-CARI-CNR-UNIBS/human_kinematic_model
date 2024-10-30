@@ -176,7 +176,7 @@ class HumanProcess:
 
         # Transformation matrix from shoulder0 frame to right shoulder frame
         T_shoulder0_rshoulder = np.eye(4)
-        T_shoulder0_rshoulder[:3, :3] = -np.array([0, 0, 0.5 * shoulder_distance])
+        T_shoulder0_rshoulder[:3, 3] = -np.array([0, 0, 0.5 * shoulder_distance])
         T_shoulder_rshoulder = T_shoulder_rshoulder0 @ T_shoulder0_rshoulder
 
         # Transformation matrix from shoulder frame to left shoulder frame 0
@@ -407,19 +407,11 @@ class HumanProcess:
         q = np.zeros(10)
         param = np.zeros(3)
 
-        shoulder_rotx = q[7]
-        hip_rotz = q[8]
-        hip_rotx = q[9]
-        shoulder_distance = param[0]
-        chest_hip_distance = param[1]
-        hip_distance = param[2]
-
         upper_chest = 0.5 * (measures_in_ext.left_shoulder + measures_in_ext.right_shoulder)
         lower_chest = 0.5 * (measures_in_ext.left_hip + measures_in_ext.right_hip)
-        
-        chest_z_in_ext = (upper_chest - lower_chest) / np.linalg.norm(upper_chest - lower_chest)  
         hip_versor_in_ext = (measures_in_ext.left_hip - measures_in_ext.right_hip) / \
             np.linalg.norm(measures_in_ext.left_hip - measures_in_ext.right_hip)
+        chest_z_in_ext = (upper_chest - lower_chest) / np.linalg.norm(upper_chest - lower_chest)  
         shoulder_versor_in_ext = (measures_in_ext.left_shoulder - measures_in_ext.right_shoulder) / \
             np.linalg.norm(measures_in_ext.left_shoulder - measures_in_ext.right_shoulder)
 
@@ -539,8 +531,8 @@ class HumanProcess:
         lwrist_in_ext = np.concatenate([measures_in_ext.left_wrist, np.array([1])])
         lwrist_in_lshoulder = np.linalg.inv(T_ext_lshoulder) @ lwrist_in_ext
 
-        q_right_arm = self.right_limb_ik(relbow_in_rshoulder, rwrist_in_rshoulder, arm_param)
-        q_left_arm = self.left_limb_ik(lelbow_in_lshoulder, lwrist_in_lshoulder, arm_param)
+        q_right_arm = self.right_limb_ik(relbow_in_rshoulder[:-1], rwrist_in_rshoulder[:-1], arm_param)
+        q_left_arm = self.left_limb_ik(lelbow_in_lshoulder[:-1], lwrist_in_lshoulder[:-1], arm_param)
 
         rknee_in_ext = np.concatenate([measures_in_ext.right_knee, np.array([1])])
         rknee_in_rhip = np.linalg.inv(T_ext_rhip) @ rknee_in_ext
@@ -554,8 +546,8 @@ class HumanProcess:
         lankle_in_ext = np.concatenate([measures_in_ext.left_ankle, np.array([1])])
         lankle_in_lhip = np.linalg.inv(T_ext_lhip) @ lankle_in_ext
 
-        q_right_leg = self.right_limb_ik(rknee_in_rhip, rankle_in_rhip, leg_param)
-        q_left_leg = self.left_limb_ik(lknee_in_lhip, lankle_in_lhip, leg_param)
+        q_right_leg = self.right_limb_ik(rknee_in_rhip[:-1], rankle_in_rhip[:-1], leg_param)
+        q_left_leg = self.left_limb_ik(lknee_in_lhip[:-1], lankle_in_lhip[:-1], leg_param)
 
         configuration = np.concatenate([q_trunk, q_right_arm, q_left_arm,
                                         q_right_leg, q_left_leg, q_head])
