@@ -1,3 +1,4 @@
+import copy
 import sympy as sym
 import numpy as np
 from human_kinematic_model import HumanProcess
@@ -26,14 +27,86 @@ PARAM = np.array([
 
 N_DOF = 7+3+4*4+2
 
-# np.random.seed(0)
-
 # Randomly generate configuration vector
 Q = np.random.rand(N_DOF)
 Q[3:7] /= np.linalg.norm(Q[3:7]) # Normalize chest rotation quaternion
 
+Q_TRUNK_TEST = \
+    np.array([
+         0.680375, -0.211234, 0.566198,  0.485962, 0.670301,
+        -0.492489, -0.268313, 0.536459, -0.444451, 0.10794
+    ])
+
+PARAM_TRUNK_TEST = PARAM[0:3]
+
+T_EXT_RSHOULDER_TEST = \
+    np.array([
+        -0.383699,  0.918489, -0.0956771,  0.694727,
+         0.915764,  0.365107, -0.167549 , -0.186102,
+        -0.11896 , -0.151906, -0.98121  ,  0.71338 ,
+         0       ,  0       ,  0        ,  1
+    ])
+
+T_EXT_LSHOULDER_TEST = \
+    np.array([
+        -0.383699,  0.918489, -0.0956771,  0.666024,
+         0.915764,  0.365107, -0.167549 , -0.236367,
+        -0.11896 , -0.151906, -0.98121  ,  0.419017,
+         0       ,  0       ,  0        ,  1
+    ])
+
+T_EXT_RHIP_TEST = \
+    np.array([
+        -0.512902,  0.853371,  0.093214,  1.00407  ,
+         0.808482,  0.443688,  0.386649, -0.0997844,
+         0.288597,  0.273675, -0.917504,  0.829257 ,
+         0       ,  0       ,  0       ,  1
+    ])
+
+T_EXT_LHIP_TEST = \
+    np.array([
+        -0.512902,  0.853371,  0.093214,  1.02737  ,
+         0.808482,  0.443688,  0.386649, -0.00312208,
+         0.288597,  0.273675, -0.917504,  0.599881 ,
+         0       ,  0       ,  0       ,  1
+    ])
+
+T_EXT_CHEST_TEST = \
+    np.array([
+        -0.383699,  0.387199 , -0.838363,  0.680375,
+         0.915764,  0.0425921, -0.399452, -0.211234,
+        -0.11896 , -0.921012 , -0.370925,  0.566198,
+         0       ,  0        ,  0       ,  1
+    ])
+
 
 def test_trunk_fk():
+    # Create human kinematic model
+    model = HumanProcess(n_dof=N_DOF, n_params=N_PARAM)
+
+    # Forward kinematics
+    T_ext_rshoulder, T_ext_lshoulder, \
+        T_ext_rhip, T_ext_lhip, \
+            T_ext_chest = \
+                model.trunk_fk(Q_TRUNK_TEST, PARAM_TRUNK_TEST)
+    
+    assert np.allclose(T_EXT_RSHOULDER_TEST, T_ext_rshoulder.flatten(), atol=1e-4), \
+        "T_ext_rshoulder matrix computed by FK is not equal to the test value"
+    
+    assert np.allclose(T_EXT_LSHOULDER_TEST, T_ext_lshoulder.flatten(), atol=1e-4), \
+        "T_ext_lshoulder matrix computed by FK is not equal to the test value"
+    
+    assert np.allclose(T_EXT_RHIP_TEST, T_ext_rhip.flatten(), atol=1e-4), \
+        "T_ext_rhip matrix computed by FK is not equal to the test value"
+    
+    assert np.allclose(T_EXT_LHIP_TEST, T_ext_lhip.flatten(), atol=1e-4), \
+        "T_ext_lhip matrix computed by FK is not equal to the test value"
+    
+    assert np.allclose(T_EXT_CHEST_TEST, T_ext_chest.flatten(), atol=1e-4), \
+        "T_ext_chest matrix computed by FK is not equal to the test value"
+
+
+def test_trunk_sym_fk():
     # Create human kinematic model
     model = HumanProcess(n_dof=N_DOF, n_params=N_PARAM)
 
@@ -123,97 +196,90 @@ def test_trunk_fk():
         "T_ext_lshoulder matrix computed by FK is not equal to symbolic computation"
     
 
+    # HIP REFERENCE FRAME:
+    TChestHip0 = sym.eye(4)
+    TChestHip0[2, 3] = -param[1]
 
+    # TWICE-RORATED HIP REFERENCE FRAME:
+    hip_rotz = q[8]
+    THip0Hip1 = sym.eye(4)
+    THip0Hip1[:3, :3] = sym.rot_axis3(-hip_rotz) # "-" because sympy expresses rotations in opposite direction
 
-    # q0 = sym.symbols('q0') # shoulder_rotx
-    # q1 = sym.symbols('q1') # hip_rotz
-    # q2 = sym.symbols('q2') # hip_rotx
+    hip_rotx = q[9]
+    THip1Hip2 = sym.eye(4)
+    THip1Hip2[:3, :3] = sym.rot_axis1(-hip_rotx) # "-" because sympy expresses rotations in opposite direction
 
-    # sh_d = sym.symbols('sh_d') # shoulder distance
-    # ch_d = sym.symbols('ch_d') # chest-hip distance
-    # h_d  = sym.symbols('h_d')  # hip distance
+    # RIGHT HIP REFERENCE FRAME:
+    THip2Rhip3 = sym.eye(4)
+    THip2Rhip3[:3, :3] = sym.rot_axis1(sym.pi/2) # "-" because sympy expresses rotations in opposite direction
 
-    # R01=sym.rot_axis3(-q1) # rot_axis3 is counterclockwise!
-    # T01=sym.Matrix.vstack(
-    #     sym.Matrix.hstack(R01,sym.zeros(3,1)),
-    #     sym.Matrix([0,0,0,1]).T
-    # )
+    TRhip3Rhip = sym.eye(4)
+    TRhip3Rhip[2, 3] = -0.5 * param[2]
 
-    # R12=sym.rot_axis1(-q2) # rot_axis1 is counterclockwise!
-    # T12=sym.Matrix.vstack(
-    #     sym.Matrix.hstack(R12,sym.zeros(3,1)),
-    #     sym.Matrix([0,0,0,1]).T
-    # )
+    # Combine the transformations
+    TExtRhip = TExtChest @ TChestHip0 @ THip0Hip1 @ THip1Hip2 @ THip2Rhip3 @ TRhip3Rhip
 
-    # T02=T01*T12
-
-    # # print(f"HIP versor x -> x = {T02[0,0]}")
-    # # print(f"HIP versor x -> y = {T02[1,0]}")
-    # # print(f"HIP versor x -> z = {T02[2,0]}")
-    # print(f"HIP versor y -> x = {T02[0,1]}")
-    # print(f"HIP versor y -> y = {T02[1,1]}")
-    # print(f"HIP versor y -> z = {T02[2,1]}")
-    # # print(f"HIP versor z -> x = {T02[0,2]}")
-    # # print(f"HIP versor z -> y = {T02[1,2]}")
-    # # print(f"HIP versor z -> z = {T02[2,2]}")
+    TExtRhip_val = np.array(
+        TExtRhip.subs(q_param_dict)).astype(float)
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    # # hip
-    # q1 = sym.symbols('q1') #head rotx
-    # q2 = sym.symbols('q2') #head roty
-    # d  = sym.symbols('d') #head distance
+    print(f"\nTExtRhip_val = \n{TExtRhip_val}")
+    print(f"\nT_ext_rhip = \n{T_ext_rhip}")
 
-    # # Define transformation matrices
-    # R01 = sym.rot_axis1(-q1)  # rot_axis1 is counterclockwise!
-    # T01 = sym.Matrix.vstack(
-    #     sym.Matrix.hstack(R01, sym.zeros(3, 1)),
-    #     sym.Matrix([0, 0, 0, 1]).T
-    # )
+    assert np.allclose(TExtRhip_val, T_ext_rhip, atol=1e-8), \
+        "T_ext_rhip matrix computed by FK is not equal to symbolic computation"
+    
 
-    # T01_val = T01.subs({q1: Q1})
-    # print(f"\nT01_val = \n{np.array(T01_val).astype(float)}")
+    # LEFT HIP REFERENCE FRAME:
+    THip2Lhip3 = copy.copy(THip2Rhip3)
 
-    # R12 = sym.rot_axis2(-q2)  # rot_axis2 is counterclockwise!
-    # T12 = sym.Matrix.vstack(
-    #     sym.Matrix.hstack(R12, sym.zeros(3, 1)),
-    #     sym.Matrix([0, 0, 0, 1]).T
-    # )
+    TLhip3Lhip = sym.eye(4)
+    TLhip3Lhip[2, 3] = 0.5 * param[2]
 
-    # T12_val = T12.subs({q2: Q2})
-    # print(f"\nT12_val = \n{np.array(T12_val).astype(float)}")
+    # Combine the transformations
+    TExtLhip = TExtChest @ TChestHip0 @ THip0Hip1 @ THip1Hip2 @ THip2Lhip3 @ TLhip3Lhip
 
-    # T23 = sym.eye(4)
-    # T23[2, 3] = d
+    TExtLhip_val = np.array(
+        TExtLhip.subs(q_param_dict)).astype(float)
+    
+    print(f"\nTExtLhip_val = \n{TExtLhip_val}")
+    print(f"\nT_ext_lhip = \n{T_ext_lhip}")
 
-    # T23_val = T23.subs({d: D})
-    # print(f"\nT23_val = \n{np.array(T23_val).astype(float)}")
+    assert np.allclose(TExtLhip_val, T_ext_lhip, atol=1e-8), \
+        "T_ext_lhip matrix computed by FK is not equal to symbolic computation"
 
-    # T03=T01*T12*T23
-    # T03_val = np.array(T01_val@T12_val@T23_val).astype(float)
 
-    # print(f"\nT03_val = \n{T03_val}")
+def truck_sym_fk():
+    q0 = sym.symbols('q0') # shoulder_rotx
+    q1 = sym.symbols('q1') # hip_rotz
+    q2 = sym.symbols('q2') # hip_rotx
 
-    # print(f"\nHEAD versor y -> x = {T03[0,3]}")
-    # print(f"HEAD versor y -> y = {T03[1,3]}")
-    # print(f"HEAD versor y -> z = {T03[2,3]}")
+    sh_d = sym.symbols('sh_d') # shoulder distance
+    ch_d = sym.symbols('ch_d') # chest-hip distance
+    h_d  = sym.symbols('h_d')  # hip distance
 
-    # print(f"\nHEAD versor y -> x = {T03_val[0,3]}")
-    # print(f"HEAD versor y -> y = {T03_val[1,3]}")
-    # print(f"HEAD versor y -> z = {T03_val[2,3]}")
+    R01=sym.rot_axis3(-q1) # rot_axis3 is counterclockwise!
+    T01=sym.Matrix.vstack(
+        sym.Matrix.hstack(R01,sym.zeros(3,1)),
+        sym.Matrix([0,0,0,1]).T
+    )
 
-    # # Assert results
-    # assert np.allclose(T_ext_head, T03_val, atol=1e-8), \
-        # "Transformation matrix computed by FK is not equal to symbolic computation"
+    R12=sym.rot_axis1(-q2) # rot_axis1 is counterclockwise!
+    T12=sym.Matrix.vstack(
+        sym.Matrix.hstack(R12,sym.zeros(3,1)),
+        sym.Matrix([0,0,0,1]).T
+    )
+
+    T02=T01*T12
+
+    print(f"HIP versor x -> x = {T02[0,0]}")
+    print(f"HIP versor x -> y = {T02[1,0]}")
+    print(f"HIP versor x -> z = {T02[2,0]}")
+    print(f"HIP versor y -> x = {T02[0,1]}")
+    print(f"HIP versor y -> y = {T02[1,1]}")
+    print(f"HIP versor y -> z = {T02[2,1]}")
+    print(f"HIP versor z -> x = {T02[0,2]}")
+    print(f"HIP versor z -> y = {T02[1,2]}")
+    print(f"HIP versor z -> z = {T02[2,2]}")
 
 
 def main():

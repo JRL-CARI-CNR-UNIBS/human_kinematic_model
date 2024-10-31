@@ -134,10 +134,10 @@ void Human28DOF::rightLimbFk(const Eigen::VectorXd& qarm,
 }
 
 
-void  Human28DOF::leftLimbFk(const Eigen::VectorXd& qarm,
-                             const Eigen::VectorXd& param,
-                             Eigen::Vector3d& elbow_in_limb,
-                             Eigen::Vector3d& wrist_in_limb)
+void Human28DOF::leftLimbFk(const Eigen::VectorXd& qarm,
+                            const Eigen::VectorXd& param,
+                            Eigen::Vector3d& elbow_in_limb,
+                            Eigen::Vector3d& wrist_in_limb)
 {
   Human28DOF::rightLimbFk(qarm,param,elbow_in_limb,wrist_in_limb);
   elbow_in_limb(2)*=-1.0;
@@ -271,7 +271,6 @@ void Human28DOF::trunkFk(const Eigen::VectorXd& q,
  
   // T_shoulder_lshoulder0: same as T_shoulder_rshoulder0
   Eigen::Affine3d T_shoulder_lshoulder0(T_shoulder_rshoulder0);
-  // REMOVE: T_shoulder_lshoulder0=Eigen::AngleAxisd(-M_PI*0.5,Eigen::Vector3d::UnitX());
 
   // T_lshoulder0_lshoulder: translation to have the origin in the shoulder center
   Eigen::Affine3d T_lshoulder0_lshoulder;
@@ -294,6 +293,7 @@ void Human28DOF::trunkFk(const Eigen::VectorXd& q,
   T_chest_hip0.setIdentity();
   T_chest_hip0.translation()(2)=-chest_hip_distance;
 
+  // TWICE-ROTATED HIP REFERENCE FRAME:
   Eigen::Affine3d T_hip0_hip1;  
   T_hip0_hip1=Eigen::AngleAxisd(hip_rotz,Eigen::Vector3d::UnitZ());
   Eigen::Affine3d T_hip1_hip2;
@@ -310,25 +310,26 @@ void Human28DOF::trunkFk(const Eigen::VectorXd& q,
   T_rhip3_rhip.setIdentity();
   T_rhip3_rhip.translation()(2)-=0.5*hip_distance;
 
+  // Express wrt the external frame
+  T_ext_rhip=T_ext_chest*T_chest_hip0*T_hip0_hip1*T_hip1_hip2*T_hip2_rhip3*T_rhip3_rhip;
+  
   // LEFT HIP REFERENCE FRAME:
   // T_hip2_lhip3: same as T_hip2_rhip3
   Eigen::Affine3d T_hip2_lhip3(T_hip2_rhip3);
-  // T_hip2_lhip3=Eigen::AngleAxisd(-M_PI*0.5,Eigen::Vector3d::UnitX());
 
   Eigen::Affine3d T_lhip3_lhip;
   T_lhip3_lhip.setIdentity();
   T_lhip3_lhip.translation()(2)=0.5*hip_distance;
 
-
+  // Express wrt the external frame
   T_ext_lhip=T_ext_chest*T_chest_hip0*T_hip0_hip1*T_hip1_hip2*T_hip2_lhip3*T_lhip3_lhip;
-  T_ext_rhip=T_ext_chest*T_chest_hip0*T_hip0_hip1*T_hip1_hip2*T_hip2_rhip3*T_rhip3_rhip;
 }
 
 
 void Human28DOF::headFk(const Eigen::VectorXd& q,
-                            const Eigen::VectorXd& param,
-                            const Eigen::Affine3d& T_ext_chest,
-                            Eigen::Affine3d &T_ext_head)
+                        const Eigen::VectorXd& param,
+                        const Eigen::Affine3d& T_ext_chest,
+                        Eigen::Affine3d &T_ext_head)
 {
   const double& q1=q(0);
   const double& q2=q(1);
@@ -513,10 +514,7 @@ void Human28DOF::fk(const Eigen::VectorXd& configuration,
           T_ext_rhip,
           T_ext_lhip,
           T_ext_chest);
-
-
   headFk(q_head,head_param,T_ext_chest,T_ext_head);
-
 
   kp_in_ext.head = T_ext_head.translation();
   kp_in_ext.right_shoulder=T_ext_rshoulder.translation();
@@ -532,13 +530,13 @@ void Human28DOF::fk(const Eigen::VectorXd& configuration,
   Eigen::Vector3d lwrist_in_lshoulder;
 
   rightLimbFk(q_right_arm,
-                arm_param,
-                relbow_in_rshoulder,
-                rwrist_in_rshoulder);
-  leftLimbFk( q_left_arm,
-                arm_param,
-                lelbow_in_lshoulder,
-                lwrist_in_lshoulder);
+              arm_param,
+              relbow_in_rshoulder,
+              rwrist_in_rshoulder);
+  leftLimbFk(q_left_arm,
+             arm_param,
+             lelbow_in_lshoulder,
+             lwrist_in_lshoulder);
 
   Eigen::Vector3d relbow_in_rhip;
   Eigen::Vector3d rwrist_in_rhip;
@@ -547,14 +545,13 @@ void Human28DOF::fk(const Eigen::VectorXd& configuration,
   Eigen::Vector3d lwrist_in_lhip;
 
   rightLimbFk(q_right_leg,
-                leg_param,
-                relbow_in_rhip,
-                rwrist_in_rhip);
-  leftLimbFk( q_left_leg,
-                leg_param,
-                lelbow_in_lhip,
-                lwrist_in_lhip);
-
+              leg_param,
+              relbow_in_rhip,
+              rwrist_in_rhip);
+  leftLimbFk(q_left_leg,
+             leg_param,
+             lelbow_in_lhip,
+             lwrist_in_lhip);
 
   kp_in_ext.right_elbow =T_ext_rshoulder*relbow_in_rshoulder;
   kp_in_ext.right_wrist =T_ext_rshoulder*rwrist_in_rshoulder;

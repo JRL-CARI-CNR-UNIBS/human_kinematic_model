@@ -33,20 +33,27 @@ class Keypoints:
         self.right_ankle    = right_ankle
 
 
-    def set_keypoints(self, keypoints: np.ndarray):
-        self.head           = keypoints[0:3]
-        self.left_shoulder  = keypoints[3:6]
-        self.left_elbow     = keypoints[6:9]
-        self.left_wrist     = keypoints[9:12]
-        self.left_hip       = keypoints[12:15]
-        self.left_knee      = keypoints[15:18]
-        self.left_ankle     = keypoints[18:21]
-        self.right_shoulder = keypoints[21:24]
-        self.right_elbow    = keypoints[24:27]
-        self.right_wrist    = keypoints[27:30]
-        self.right_hip      = keypoints[30:33]
-        self.right_knee     = keypoints[33:36]
-        self.right_ankle    = keypoints[36:39]
+    def set_keypoints(self, keypoints: dict):
+        self.head           = keypoints["head"]
+        self.left_shoulder  = keypoints["left_shoulder"]
+        self.left_elbow     = keypoints["left_elbow"]
+        self.left_wrist     = keypoints["left_wrist"]
+        self.left_hip       = keypoints["left_hip"]
+        self.left_knee      = keypoints["left_knee"]
+        self.left_ankle     = keypoints["left_ankle"]
+        self.right_shoulder = keypoints["right_shoulder"]
+        self.right_elbow    = keypoints["right_elbow"]
+        self.right_wrist    = keypoints["right_wrist"]
+        self.right_hip      = keypoints["right_hip"]
+        self.right_knee     = keypoints["right_knee"]
+        self.right_ankle    = keypoints["right_ankle"]
+
+    
+    def get_keypoints(self):
+        return np.array([self.head, self.left_shoulder, self.left_elbow, self.left_wrist,
+                         self.left_hip, self.left_knee, self.left_ankle, self.right_shoulder,
+                         self.right_elbow, self.right_wrist, self.right_hip, self.right_knee,
+                         self.right_ankle]).flatten()
 
 
     @staticmethod
@@ -241,16 +248,16 @@ class HumanProcess:
         T_ext_head = T_ext_chest @ T_chest_head0 @ T_head0_head1 @ T_head1_head
         
         # Check if T_ext_head is a rotation matrix
-        assert np.allclose(np.linalg.det(T_ext_head), 1.0), "T_ext_head is not a rotation matrix"
+        assert np.isclose(np.linalg.det(T_ext_head), 1.0), "T_ext_head is not a rotation matrix"
 
         return T_ext_head 
 
 
     def right_limb_fk(self, qarm, param):
-        q1 = qarm[0]  # shoulder rot z
-        q2 = qarm[1]  # shoulder rot x
-        q3 = qarm[2]  # shoulder rot y
-        q5 = qarm[3]  # elbow rot z
+        q1 = qarm[0]   # shoulder rot z
+        q2 = qarm[1]   # shoulder rot x
+        q3 = qarm[2]   # shoulder rot y
+        q5 = qarm[3]   # elbow rot z
         q4 = param[0]  # upper arm length
         q6 = param[1]  # lower arm length
 
@@ -354,9 +361,6 @@ class HumanProcess:
         keypoints["right_ankle"] = (T_ext_rhip @ rwrist_in_rhip)[:3]
         keypoints["left_knee"]   = (T_ext_lhip @ lelbow_in_lhip)[:3]
         keypoints["left_ankle"]  = (T_ext_lhip @ lwrist_in_lhip)[:3]
-
-        # Convert the keypoints dictionary to a numpy array
-        keypoints = np.array([keypoints[key] for key in keypoints.keys()]).flatten()
 
         return keypoints
 

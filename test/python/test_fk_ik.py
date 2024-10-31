@@ -1,6 +1,32 @@
 import numpy as np
 from human_kinematic_model import Keypoints, HumanProcess
 
+TEST_Q = np.array([ 0.680375, -0.211234,  0.566198,  0.485962,  0.670301,
+                   -0.492489, -0.268313,  0.536459, -0.444451,  0.10794,
+                   -0.0452059, 0.257742, -0.270431,  0.0268018, 0.904459,
+                    0.83239,   0.271423,  0.434594, -0.716795,  0.213938,
+                   -0.967399, -0.514226, -0.725537,  0.608354, -0.686642,
+                   -0.198111, -0.740419, -0.782382])
+
+TEST_KPTS = {
+    "head":           np.array([0.687107, -0.544971  , 0.345802]),
+    "left_shoulder":  np.array([0.666024, -0.236367  , 0.419017]),
+    "left_elbow":     np.array([0.862801, -0.298988  , 0.636634]),
+    "left_wrist":     np.array([0.962695, -0.443399  , 0.879876]),
+    "left_hip":       np.array([1.02737 , -0.00312208, 0.599881]),
+    "left_knee":      np.array([1.09435 ,  0.168946  , 0.897213]),
+    "left_ankle":     np.array([1.09923 ,  0.340047  , 1.25874 ]),
+    "right_shoulder": np.array([0.694727, -0.186102  , 0.71338 ]),
+    "right_elbow":    np.array([0.948553, -0.0811031 , 0.592767]),
+    "right_wrist":    np.array([1.20627 ,  0.0174684 , 0.475016]),
+    "right_hip":      np.array([1.00407 , -0.0997844 , 0.829257]),
+    "right_knee":     np.array([1.11579 ,  0.225018  , 0.896494]),
+    "right_ankle":    np.array([1.12542 ,  0.615157  , 0.80875 ])
+}
+TEST_KPT = Keypoints()
+TEST_KPT.set_keypoints(TEST_KPTS)
+
+
 def test_kinematics():
     shoulder_distance  = 0.3
     chest_hip_distance = 0.4
@@ -29,33 +55,45 @@ def test_kinematics():
         head_distance
     ])
 
-    for idx in range(10**4):
-
+    for _ in range(10**4):
         # Randomly generate configuration vector
-        q = np.random.rand(n_dof)
-        q[3:7] /= np.linalg.norm(q[3:7]) # Normalize chest rotation quaternion
+        # q = np.random.rand(n_dof)
+        # q[3:7] /= np.linalg.norm(q[3:7]) # Normalize chest rotation quaternion
+        q = TEST_Q
 
         # Create human kinematic model
         model = HumanProcess(n_dof=n_dof, n_params=n_param)
         
-        # === Test inverse kinematics ===
-        
-        # Forward kinematics
+        # === Test Forward Kinematics ===
         kpts = model.forward_kinematics(q, param)
         kp_in_ext = Keypoints()
         kp_in_ext.set_keypoints(kpts)
 
-        # Inverse kinematics
+        # Print and assert results
+        print("\nkp_in_ext [original]:\n", kp_in_ext)
+        print("\nkp_in_ext [test]:\n", TEST_KPT)
+
+        assert np.allclose(kp_in_ext.get_keypoints(), TEST_KPT.get_keypoints(), atol=1.e-4), \
+            "kp_in_ext is not equal to TEST_KPT. Error in forward kinematics."
+        # ===============================
+
+        # === Test Inverse Kinematics ===
         q2, param2 = model.inverse_kinematics(kp_in_ext)
 
         # Print and assert results
-        print("\nq [original]: ", q)
-        print("\nq2 [after ik]: ", q2)
-        print("\nparam [original]: ", param)
-        print("\nparam2 [after ik]: ", param2)
+        print("\nq [original]:\n", q)
+        print("\nq2 [after ik]:\n", q2)
+        print("\nparam [original]:\n", param)
+        print("\nparam2 [after ik]:\n", param2)
 
         assert all(np.abs(q-q2) < 1e-8), "q2 computed by IK is not equal to original q"
         assert all(np.abs(param-param2) < 1e-8), "param2 computed by IK is not equal to original param"
+        # === Test Inverse Kinematics ===
+
+
+
+
+
 
         # === Test forward kinematics ===
 
