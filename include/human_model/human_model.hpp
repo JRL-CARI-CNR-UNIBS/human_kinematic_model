@@ -60,11 +60,21 @@ struct keypoints
 };
 
 
+struct JointLimits
+{
+  double min_;
+  double max_;
+
+  public:
+    JointLimits(double min, double max) : min_(min), max_(max) {};
+};
+
+
 class Human28DOF
 {
-protected:
-  Eigen::VectorXd configurations_;
-  Eigen::VectorXd velocities_;
+// protected:
+//   Eigen::VectorXd configurations_;
+//   Eigen::VectorXd velocities_;
 
 
 public:
@@ -76,6 +86,7 @@ public:
    * @param configuration: human configuration
    */
   static void ik(const keypoints& measures_in_ext,
+                 const std::vector<JointLimits>& joint_limits,
                  Eigen::VectorXd& configuration,
                  Eigen::VectorXd& param);
 
@@ -125,11 +136,13 @@ public:
   static void rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
                           const Eigen::Vector3d& wrist_in_limb,
                           const Eigen::VectorXd& param,
+                          const std::vector<JointLimits>& qbounds,
                           Eigen::VectorXd& qarm);
 
   static void leftLimbIk(const Eigen::Vector3d& elbow_in_limb,
                          const Eigen::Vector3d& wrist_in_limb,
                          const Eigen::VectorXd& param,
+                         const std::vector<JointLimits>& qarm_bounds,
                          Eigen::VectorXd& qarm);
 
 

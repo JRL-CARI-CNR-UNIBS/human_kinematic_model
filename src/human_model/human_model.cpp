@@ -31,16 +31,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace human_model
 {
 
-// struct JointLimits
-// {
-//   double min;
-//   double max;
-// };
-
 void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
                              const Eigen::Vector3d& wrist_in_limb,
                              const Eigen::VectorXd& param,
-                            //  const std::vector<JointLimits>& qbounds,
+                             const std::vector<JointLimits>& qarm_bounds,
                              Eigen::VectorXd& qarm)
 {
   double& q1=qarm(0);  // shoulder rot z
@@ -50,6 +44,9 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
 
   const double& q4=param(0);  // upper arm length
   const double& q6=param(1);  // lower arm length
+
+  double q3min=qarm_bounds[2].min_; // shoulder rot y lower bound
+  double q3max=qarm_bounds[2].max_; // shoulder rot y upper bound
 
   q1=std::atan2(-elbow_in_limb(0),elbow_in_limb(1));
   if (std::abs(std::sin(q1))>0.5)
@@ -69,8 +66,17 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
   Eigen::Affine3d T02=T01*T12;
 
   Eigen::Vector3d wrist_in_2=T02.inverse()*wrist_in_limb;
-  q3a=std::atan2(wrist_in_2(2),-wrist_in_2(0));
-  q3b=std::atan2(-wrist_in_2(2),wrist_in_2(0));
+
+  double q3a(std::atan2(wrist_in_2(2),-wrist_in_2(0)));
+  double q3b(std::atan2(-wrist_in_2(2),wrist_in_2(0)));
+
+  // Select the solution with the shoulder rot y within the limits
+  if (q3a>q3min && q3a<q3max)
+    q3=q3a;
+  else if (q3b>q3min && q3b<q3max)
+    q3=q3b;
+  else
+    throw std::runtime_error("No solution for the shoulder rot y within the limits");
 
   double q6sinq5;
   if (std::sin(q3)>0.5)
@@ -87,13 +93,14 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
 void Human28DOF::leftLimbIk(const Eigen::Vector3d& elbow_in_limb,
                             const Eigen::Vector3d& wrist_in_limb,
                             const Eigen::VectorXd& param,
+                            const std::vector<JointLimits>& qarm_bounds,
                             Eigen::VectorXd& qarm)
 {
   Eigen::Vector3d mirror_elbow_in_limb=elbow_in_limb;
   Eigen::Vector3d mirror_wrist_in_limb=wrist_in_limb;
   mirror_elbow_in_limb(2)*=-1.0;
   mirror_wrist_in_limb(2)*=-1.0;
-  rightLimbIk(mirror_elbow_in_limb,mirror_wrist_in_limb,param,qarm);
+  rightLimbIk(mirror_elbow_in_limb,mirror_wrist_in_limb,param,qarm_bounds,qarm);
   return;
 }
 
@@ -191,6 +198,22 @@ void Human28DOF::trunkIk(const keypoints& measures_in_ext,
   chest_rot.col(2)=chest_z_in_ext; // vertical axis (lower chest to upper chest)
 
   Eigen::Quaterniond chest_q(chest_rot);
+
+  // If the scalar part of the quaternion is negative,
+  // multiply by -1 to ensure consistent representation
+  if (chest_q.w() < 0) {
+    chest_q.coeffs() *= -1.0;
+  }
+
+  // // If all elements of the quaternion are negative, multiply by -1 (equivalent rotation)
+  // if (chest_q.coeffs().minCoeff()<0)
+  //   chest_q.coeffs()*=-1.0;
+
+  // If all elements of the quaternion are negative, multiply by -1 (equivalent rotation)
+  // const auto& coeffs = chest_q.coeffs();
+  // if (coeffs[0] < 0 && coeffs[1] < 0 && coeffs[2] < 0 && coeffs[3] < 0) {
+  //     chest_q.coeffs() *= -1.0;
+  // }
 
   Eigen::Affine3d T_ext_chest;
   T_ext_chest=chest_q;
@@ -380,6 +403,7 @@ void Human28DOF::headIk(const keypoints& measures_in_ext,
 
 
 void Human28DOF::ik(const keypoints& measures_in_ext,
+                    const std::vector<JointLimits>& qbounds,
                     Eigen::VectorXd& configuration,
                     Eigen::VectorXd& param)
 {
@@ -433,9 +457,23 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   arm_param(0)=upper_arm_length;
   arm_param(1)=lower_arm_length;
 
+  std::vector<JointLimits> q_arm_bounds = {
+    qbounds[10],
+    qbounds[11],
+    qbounds[12],
+    qbounds[13]
+  };
+
   Eigen::VectorXd leg_param(2);
   leg_param(0)=upper_leg_length;
   leg_param(1)=lower_leg_length;
+
+  std::vector<JointLimits> q_leg_bounds = {
+    qbounds[18],
+    qbounds[19],
+    qbounds[20],
+    qbounds[21]
+  };
 
 
   Eigen::Vector3d relbow_in_rshoulder=T_ext_rshoulder.inverse()*measures_in_ext.right_elbow;
@@ -451,10 +489,12 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   rightLimbIk(relbow_in_rshoulder,
               rwrist_in_rshoulder,
               arm_param,
+              q_arm_bounds,
               q_right_arm);
   leftLimbIk(lelbow_in_lshoulder,
              lwrist_in_lshoulder,
              arm_param,
+             q_arm_bounds,
              q_left_arm);
 
   Eigen::Vector3d relbow_in_rhip=T_ext_rhip.inverse()*measures_in_ext.right_knee;
@@ -469,10 +509,12 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   rightLimbIk(relbow_in_rhip,
               rwrist_in_rhip,
               leg_param,
+              q_leg_bounds,
               q_right_leg);
   leftLimbIk(lelbow_in_lhip,
              lwrist_in_lhip,
              leg_param,
+             q_leg_bounds,
              q_left_leg);
 
 

@@ -2,9 +2,9 @@
 
 int main(int argc, char *argv[])
 {
-  double shoulder_distance  =0.3;
-  double chest_hip_distance =0.4;
-  double hip_distance       =0.25;
+  double shoulder_distance  = 0.3;
+  double chest_hip_distance = 0.4;
+  double hip_distance       = 0.25;
 
   double upper_arm_length = 0.3;
   double lower_arm_length = 0.3;
@@ -12,17 +12,37 @@ int main(int argc, char *argv[])
   double lower_leg_length = 0.4;
   double head_distance    = 0.4;
 
-  Eigen::VectorXd q(7+3+4*4+2);
-  Eigen::VectorXd param(3+2+2+1);
+  int n_dof = 7+3+4*4+2;
+  int n_param = 3+2+2+1;
+  Eigen::VectorXd q(n_dof);
+  Eigen::VectorXd param(n_param);
 
-  for (size_t idx=0; idx<5; idx++)
+  // Initialize joint limits
+  // (Vector Initialization: The vector qbounds is initialized with n_dof elements,
+  // each set to human_model::JointLimits(-M_PI, M_PI))
+  std::vector<human_model::JointLimits> qbounds(n_dof,
+                                                human_model::JointLimits(-M_PI, M_PI));
+
+  // Set the shoulder rot y joint limits
+  qbounds[12]=human_model::JointLimits(-M_PI/2,M_PI/2); // right shoulder
+  qbounds[16]=human_model::JointLimits(-M_PI/2,M_PI/2); // left shoulder
+  qbounds[20]=human_model::JointLimits(-M_PI/2,M_PI/2); // right hip
+  qbounds[24]=human_model::JointLimits(-M_PI/2,M_PI/2); // left hip 
+
+  // Test the fk and ik functions
+  for (size_t idx=0; idx<1e4; idx++)
   {
     std::cout << std::endl << "=======================================";
     std::cout << "=======================================" << std::endl;
     std::cout << "idx: " << idx << std::endl;
 
     q.setRandom();
-    q.block(3,0,4,1)/=q.block(3,0,4,1).norm();
+    q.block(3,0,4,1)/=q.block(3,0,4,1).norm(); // normalize the quaternion
+    // If the scalar part of the quaternion is negative,
+    // multiply by -1 to ensure consistent representation
+    if (q(6, 0) < 0) {
+      q.block(3,0,4,1) *= -1.0;
+    }
 
     param(0)=shoulder_distance;
     param(1)=chest_hip_distance;
@@ -46,7 +66,7 @@ int main(int argc, char *argv[])
     human_model::keypoints kp2_in_ext;
     human_model::keypoints diff_in_ext;
 
-    human_model::Human28DOF::ik(kp_in_ext,q2,param2);
+    human_model::Human28DOF::ik(kp_in_ext,qbounds,q2,param2);
 
     std::cout << "\nq2 [before fk]           : \n" << q2.transpose() << std::endl;
     std::cout << "\ndiff q [before fk]       : \n" << (q-q2).transpose() << std::endl;
@@ -71,8 +91,8 @@ int main(int argc, char *argv[])
     std::cout << "\nconfiguration distance: " << q_distance << std::endl;
     std::cout << "\nparam distance: " << param_distance << std::endl << std::endl;
 
-    // assert(("keypoint distance is greater than threshold",kpt_distance<1e-8));
-    // assert(("configuration difference is greater than threshold",q_distance<1e-8));
-    // assert(("param difference is greater than threshold",param_distance<1e-8));
+    assert(("keypoint distance is greater than threshold",kpt_distance<1e-8));
+    assert(("configuration difference is greater than threshold",q_distance<1e-8));
+    assert(("param difference is greater than threshold",param_distance<1e-8));
   }
 }
