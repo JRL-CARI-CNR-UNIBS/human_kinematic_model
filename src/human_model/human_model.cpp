@@ -31,9 +31,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace human_model
 {
 
+// struct JointLimits
+// {
+//   double min;
+//   double max;
+// };
+
 void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
                              const Eigen::Vector3d& wrist_in_limb,
                              const Eigen::VectorXd& param,
+                            //  const std::vector<JointLimits>& qbounds,
                              Eigen::VectorXd& qarm)
 {
   double& q1=qarm(0);  // shoulder rot z
@@ -62,10 +69,11 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
   Eigen::Affine3d T02=T01*T12;
 
   Eigen::Vector3d wrist_in_2=T02.inverse()*wrist_in_limb;
-  q3=std::atan2(wrist_in_2(2),-wrist_in_2(0));
+  q3a=std::atan2(wrist_in_2(2),-wrist_in_2(0));
+  q3b=std::atan2(-wrist_in_2(2),wrist_in_2(0));
 
   double q6sinq5;
-  if (std::abs(std::sin(q3))>0.5)
+  if (std::sin(q3)>0.5)
     q6sinq5=wrist_in_2(2)/std::sin(q3);
   else
     q6sinq5=-wrist_in_2(0)/std::cos(q3);
@@ -114,7 +122,7 @@ void Human28DOF::rightLimbFk(const Eigen::VectorXd& qarm,
   Eigen::Affine3d T23;
   T23=rot23;
 
-  Eigen::Affine3d T34;
+  Eigen::Affine3d T34; // translation along y
   T34.setIdentity();
   T34.translation()(1)=q4;
 
@@ -122,7 +130,7 @@ void Human28DOF::rightLimbFk(const Eigen::VectorXd& qarm,
   Eigen::Affine3d T45;
   T45=rot45;
 
-  Eigen::Affine3d T56;
+  Eigen::Affine3d T56; // translation along y
   T56.setIdentity();
   T56.translation()(1)=q6;
 

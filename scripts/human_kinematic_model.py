@@ -274,14 +274,14 @@ class HumanProcess:
         T23[:3, :3] = rot23
 
         T34 = np.eye(4)
-        T34[1, 3] = q4
+        T34[1, 3] = q4 # translation along y
 
         rot45 = R.from_euler('z', q5).as_matrix()
         T45 = np.eye(4)
         T45[:3, :3] = rot45
 
         T56 = np.eye(4)
-        T56[1, 3] = q6
+        T56[1, 3] = q6 # translation along y
 
         T04 = T01 @ T12 @ T23 @ T34
         T06 = T04 @ T45 @ T56

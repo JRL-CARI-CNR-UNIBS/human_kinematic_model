@@ -39,9 +39,9 @@ def right_arm_sym_fk():
 
     T04=T01*T12*T23*T34 # elbow
 
-    print(f"ELBOW x = {T04[0,3]}")
-    print(f"ELBOW y = {T04[1,3]}")
-    print(f"ELBOW z = {T04[2,3]}")
+    print(f"\nELBOW in limb x = {T04[0,3]}")
+    print(f"ELBOW in limb y = {T04[1,3]}")
+    print(f"ELBOW in limb z = {T04[2,3]}")
 
 
     R45=sym.rot_axis3(-q5) # rot_axis3 is counterclockwise!
@@ -55,16 +55,16 @@ def right_arm_sym_fk():
 
     T26=T23*T34*T45*T56
 
-    print(f"WRIST x 26= {T26[0,3]}")
-    print(f"WRIST y 26= {T26[1,3]}")
-    print(f"WRIST z 26= {T26[2,3]}")
+    print(f"\nWRIST in frame 2 x = {T26[0,3]}")
+    print(f"WRIST in frame 2 y = {T26[1,3]}")
+    print(f"WRIST in frame 2 z = {T26[2,3]}")
 
 
     T06=T04*T45*T56
 
-    print(f"WRIST x 06= {T06[0,3]}")
-    print(f"WRIST y 06= {T06[1,3]}")
-    print(f"WRIST z 06= {T06[2,3]}")
+    print(f"\nWRIST in limb x = {T06[0,3]}")
+    print(f"WRIST in limb y = {T06[1,3]}")
+    print(f"WRIST in limb z = {T06[2,3]}")
 
 
 def main():
