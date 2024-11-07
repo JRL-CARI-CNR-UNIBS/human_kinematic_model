@@ -6,6 +6,7 @@ cmake_minimum_required(VERSION 3.16.0)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/cnrConfigMacros.cmake)
 get_project_name("package.xml" extracted_name extracted_version)
 project(${extracted_name} VERSION ${extracted_version} LANGUAGES CXX)
+set(CMAKE_BUILD_TYPE Release)
 #############################
 ## END - PRELIMINARIES     ##
 #############################
@@ -23,12 +24,17 @@ option(BUILD_EXAMPLE            "COMPILE THE EXAMPLE" OFF)
 
 
 #############################
-## DEPENDANCIES            ##
+## DEPENDENCIES            ##
 #############################
 find_package(rdyn_core REQUIRED)
+
 #cnr_enable_testing(ENABLE_TESTING ENABLE_COVERAGE)
 
-find_package(Python COMPONENTS Interpreter REQUIRED) # for the installation of the python package
+find_package(Python COMPONENTS REQUIRED
+              Interpreter  # for the installation of the python package
+              Development # for the c++ -> python bindings
+)
+find_package(pybind11 CONFIG)
 
 # detect virtualenv and set Pip args accordingly
 if(DEFINED ENV{VIRTUAL_ENV} OR DEFINED ENV{CONDA_PREFIX})
@@ -37,7 +43,7 @@ else()
   set(_pip_args "--user")
 endif()
 #############################
-## END DEPENDANCIES        ##
+## END DEPENDENCIES        ##
 #############################
 
 #################
@@ -70,17 +76,19 @@ target_link_libraries(test
 #target_compile_definitions(test PUBLIC PROJECT_SRC_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
 #cnr_target_compile_options(test)
 
+# Python bindings
+pybind11_add_module(human_model_binding src/human_model/bindings.cpp)
+target_link_libraries(human_model_binding PRIVATE human_model)
 
-
-if(BUILD_EXAMPLE)
-## example of usage
-  add_executable(test test/test.cpp)
-  target_link_libraries(test
-    PUBLIC
-    human_model::human_model)
-  target_compile_definitions(rdyn_speed_test PUBLIC PROJECT_SRC_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
-  cnr_target_compile_options(rdyn_speed_test)
-endif()
+# if(BUILD_EXAMPLE)
+# ## example of usage
+#   add_executable(test test/test.cpp)
+#   target_link_libraries(test
+#     PUBLIC
+#     human_model::human_model)
+#   target_compile_definitions(rdyn_speed_test PUBLIC PROJECT_SRC_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
+#   cnr_target_compile_options(rdyn_speed_test)
+# endif()
 #################
 ## END - Build ##
 #################
@@ -94,7 +102,9 @@ install(DIRECTORY include/human_model
   DESTINATION include)
 
 install(
-  TARGETS human_model
+  TARGETS
+    human_model
+    human_model_binding
   EXPORT human_modelTargets
   ARCHIVE DESTINATION lib/human_model
   LIBRARY DESTINATION lib/human_model

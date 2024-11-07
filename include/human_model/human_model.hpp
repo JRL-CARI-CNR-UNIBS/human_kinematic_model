@@ -29,6 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <rdyn_core/primitives.h>
+#include <map>
 
 
 namespace human_model
@@ -47,8 +48,6 @@ struct keypoints
   Eigen::Vector3d left_knee;
   Eigen::Vector3d left_ankle;
 
-
-
   Eigen::Vector3d right_shoulder;
   Eigen::Vector3d right_elbow;
   Eigen::Vector3d right_wrist;
@@ -56,6 +55,17 @@ struct keypoints
   Eigen::Vector3d right_hip;
   Eigen::Vector3d right_knee;
   Eigen::Vector3d right_ankle;
+
+  static double keypointDistance(const keypoints& kp1_in_ext,
+                                 const keypoints& kp2_in_ext,
+                                 keypoints& diff_in_ext);
+
+  void set_keypoints(const std::map<std::string,
+                     Eigen::Vector3d>& keypoints);
+
+  const std::vector<double> get_keypoints();
+
+  const std::string toString();
 
 };
 
@@ -90,13 +100,15 @@ public:
                  Eigen::VectorXd& configuration,
                  Eigen::VectorXd& param);
 
+  // Used to return values beyond modifying the input arguments
+  static std::pair<Eigen::VectorXd, Eigen::VectorXd> ik_binding(const keypoints& measures_in_ext,
+                                                                const std::vector<JointLimits>& joint_limits,
+                                                                Eigen::VectorXd& configuration,
+                                                                Eigen::VectorXd& param);
+
   static void fk(const Eigen::VectorXd& configuration,
                  const Eigen::VectorXd& param,
-                 keypoints& kp_in_ext) ;
-
-  static double keypointDistance(const keypoints& kp1_in_ext,
-                                 const keypoints& kp2_in_ext,
-                                 keypoints& diff_in_ext);
+                 keypoints& kp_in_ext);
 
 
   static void trunkIk(const keypoints& measures_in_ext,
@@ -136,7 +148,7 @@ public:
   static void rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
                           const Eigen::Vector3d& wrist_in_limb,
                           const Eigen::VectorXd& param,
-                          const std::vector<JointLimits>& qbounds,
+                          const std::vector<JointLimits>& qarm_bounds,
                           Eigen::VectorXd& qarm);
 
   static void leftLimbIk(const Eigen::Vector3d& elbow_in_limb,

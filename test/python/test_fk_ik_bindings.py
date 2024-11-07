@@ -1,6 +1,6 @@
 import time
 import numpy as np
-from human_kinematic_model import Keypoints, JointLimits, HumanProcess
+from human_model_binding import Keypoints, JointLimits, Human28DOF
 
 # Define test configuration vector
 TEST_Q = np.array([ 0.680375, -0.211234,  0.566198,  0.485962,  0.670301,
@@ -69,16 +69,17 @@ def test_fk():
     q = TEST_Q
 
     # Create human kinematic model
-    model = HumanProcess(n_dof=n_dof, n_params=n_param)
+    model = Human28DOF()
+
+    # Create Keypoints object
+    kp_in_ext = Keypoints()
     
     # === Test Forward Kinematics ===
-    kpts = model.forward_kinematics(q, param)
-    kp_in_ext = Keypoints()
-    kp_in_ext.set_keypoints(kpts)
+    model.forward_kinematics(q, param, kp_in_ext)
 
     # Print and assert results
-    print("\nkp_in_ext [original]:\n", kp_in_ext)
-    print("\nkp_in_ext [test]:\n", TEST_KPT)
+    print("\nkp_in_ext [original]:\n", kp_in_ext.to_string())
+    print("\nkp_in_ext [test]:\n", TEST_KPT.to_string())
 
     assert np.allclose(kp_in_ext.get_keypoints(), TEST_KPT.get_keypoints(), atol=1.e-4), \
         "kp_in_ext is not equal to TEST_KPT. Error in forward kinematics."
@@ -105,25 +106,26 @@ def test_kinematics():
         print("\nparam [original]: \n", param)
 
         # Create human kinematic model
-        model = HumanProcess(n_dof=n_dof, n_params=n_param)
-        
-        kpts = model.forward_kinematics(q, param)
-        kp_in_ext = Keypoints()
-        kp_in_ext.set_keypoints(kpts)
+        model = Human28DOF()
 
-        q2, param2 = model.inverse_kinematics(kp_in_ext, qbounds)
+        kp_in_ext = Keypoints()
+        model.forward_kinematics(q, param, kp_in_ext)
+
+        q2 = np.zeros(n_dof)
+        param2 = np.zeros(n_param)
+        q2, param2 = model.inverse_kinematics(kp_in_ext, qbounds, q2, param2)
 
         print("\nq2 [before fk]:        \n", q2)
         print("\ndiff q [before fk]:    \n", (q-q2))
         print("\nparam2 [before fk]:    \n", param2)
         print("\ndiff param [before fk]:\n", (param-param2))
 
-        kpts2 = model.forward_kinematics(q2, param2)
         kp2_in_ext = Keypoints()
-        kp2_in_ext.set_keypoints(kpts2)
-
+        model.forward_kinematics(q2, param2, kp2_in_ext)
+        
         # Compute distance between keypoints computed by forward kinematics
-        kpt_distance, diff_in_ext = Keypoints.keypoint_distance(kp_in_ext, kp2_in_ext)
+        diff_in_ext = Keypoints()
+        kpt_distance = Keypoints.keypoint_distance(kp_in_ext, kp2_in_ext, diff_in_ext)
 
         # Compute distance between configuration and parameter vectors
         q_distance = np.linalg.norm(q-q2)
@@ -134,9 +136,9 @@ def test_kinematics():
         print("\nparam2 [after fk]:     \n", param2)
         print("\ndiff param:            \n", (param-param2)) 
 
-        print("\nkp:                    \n", kp_in_ext)
-        print("\nkp2:                   \n", kp2_in_ext)
-        print("\nkp diff:               \n", diff_in_ext)
+        print("\nkp:                    \n", kp_in_ext.to_string())
+        print("\nkp2:                   \n", kp2_in_ext.to_string())
+        print("\nkp diff:               \n", diff_in_ext.to_string())
         print("\nkeypoint distance:     \n", kpt_distance)
         print("\nconfiguration distance:\n", q_distance)
         print("\nparam distance:        \n", param_distance, "\n")

@@ -108,6 +108,12 @@ class Keypoints:
                 f"right_ankle     = {self.right_ankle.T}\n")
 
 
+class JointLimits:
+    def __init__(self, min, max):
+        self.min = min
+        self.max = max
+
+
 class HumanProcess:
     def __init__(self, n_dof=28, n_params=8, n_keypoints=13, sampling_time=0.01):
         self.dt = sampling_time
@@ -365,8 +371,11 @@ class HumanProcess:
         return keypoints
 
 
-    def right_limb_ik(self, elbow_in_limb, wrist_in_limb, param):
+    def right_limb_ik(self, elbow_in_limb, wrist_in_limb, param, qarm_bounds: list[JointLimits]):
         qarm = np.zeros(4)
+
+        q3min = qarm_bounds[0].min # shoulder rot y lower bound
+        q3max = qarm_bounds[0].max # shoulder rot y upper bound
         
         q1 = np.arctan2(-elbow_in_limb[0], elbow_in_limb[1])
         if np.abs(np.sin(q1)) > 0.5:
@@ -383,7 +392,17 @@ class HumanProcess:
         T02 = T01 @ T12
         
         wrist_in_2 = np.linalg.inv(T02) @ wrist_in_limb
-        q3 = np.arctan2(wrist_in_2[2], -wrist_in_2[0])
+
+        q3a = np.arctan2(wrist_in_2[2], -wrist_in_2[0])
+        q3b = np.arctan2(-wrist_in_2[2], wrist_in_2[0])
+
+        # Select the solution with the shoulder rot y within the limits
+        if q3a > q3min and q3a < q3max:
+            q3 = q3a
+        elif q3b > q3min and q3b < q3max:
+            q3 = q3b
+        else:
+            raise ValueError("No solution for the shoulder rot y within the limits.")
         
         if np.abs(np.sin(q3)) > 0.5:
             q6sinq5 = wrist_in_2[2] / np.sin(q3)
@@ -402,12 +421,12 @@ class HumanProcess:
         return qarm
 
 
-    def left_limb_ik(self, elbow_in_limb, wrist_in_limb, param):
+    def left_limb_ik(self, elbow_in_limb, wrist_in_limb, param, qarm_bounds: list[JointLimits]):
         mirror_elbow_in_limb = elbow_in_limb.copy()
         mirror_wrist_in_limb = wrist_in_limb.copy()
         mirror_elbow_in_limb[2] *= -1.0
         mirror_wrist_in_limb[2] *= -1.0
-        return self.right_limb_ik(mirror_elbow_in_limb, mirror_wrist_in_limb, param) 
+        return self.right_limb_ik(mirror_elbow_in_limb, mirror_wrist_in_limb, param, qarm_bounds) 
 
 
     def trunk_ik(self, measures_in_ext: Keypoints):
@@ -433,6 +452,12 @@ class HumanProcess:
 
         chest_rot = np.column_stack((chest_x_in_ext, chest_y_in_ext, chest_z_in_ext))
         chest_q = R.from_matrix(chest_rot).as_quat() # type: ignore
+        
+        # If the scalar part of the quaternion is negative,
+        # multiply by -1 to ensure consistent representation
+        if chest_q[3] < 0:
+            chest_q *= -1
+
 
         T_ext_chest = np.eye(4)
         T_ext_chest[:3, :3] = chest_rot
@@ -469,8 +494,12 @@ class HumanProcess:
         param = np.zeros(1)
         q = np.zeros(2)
 
+        # Express head_in_ext in homogeneous coordinates
         head_in_ext = np.concatenate([measures_in_ext.head, np.array([1])])
-        head_in_chest = np.linalg.inv(T_ext_chest) @ head_in_ext
+
+        # Compute head_in_chest and remove the homogeneous coordinate
+        head_in_chest = (np.linalg.inv(T_ext_chest) @ head_in_ext)[:-1]
+
         param[0] = np.linalg.norm(head_in_chest)
 
         q1 = np.arctan2(-head_in_chest[1], head_in_chest[2])
@@ -487,7 +516,7 @@ class HumanProcess:
         return q, param
 
 
-    def inverse_kinematics(self, measures_in_ext: Keypoints):
+    def inverse_kinematics(self, measures_in_ext: Keypoints, qbounds: list[JointLimits]):
         # 7 dof for chest (tra+quat)
         # 1 dof: shoulder rotation is the rotation around chest_x_in_ext (frontal direction)
         # 1 dof for trunk rotation (around chest_z)
@@ -526,6 +555,9 @@ class HumanProcess:
         arm_param = np.array([upper_arm_length, lower_arm_length])
         leg_param = np.array([upper_leg_length, lower_leg_length])
 
+        q_arm_bounds = qbounds[10:13]
+        q_leg_bounds = qbounds[18:21]
+
         relbow_in_ext = np.concatenate([measures_in_ext.right_elbow, np.array([1])])
         relbow_in_rshoulder = np.linalg.inv(T_ext_rshoulder) @ relbow_in_ext
 
@@ -538,8 +570,8 @@ class HumanProcess:
         lwrist_in_ext = np.concatenate([measures_in_ext.left_wrist, np.array([1])])
         lwrist_in_lshoulder = np.linalg.inv(T_ext_lshoulder) @ lwrist_in_ext
 
-        q_right_arm = self.right_limb_ik(relbow_in_rshoulder[:-1], rwrist_in_rshoulder[:-1], arm_param)
-        q_left_arm = self.left_limb_ik(lelbow_in_lshoulder[:-1], lwrist_in_lshoulder[:-1], arm_param)
+        q_right_arm = self.right_limb_ik(relbow_in_rshoulder[:-1], rwrist_in_rshoulder[:-1], arm_param, q_arm_bounds)
+        q_left_arm = self.left_limb_ik(lelbow_in_lshoulder[:-1], lwrist_in_lshoulder[:-1], arm_param, q_arm_bounds)
 
         rknee_in_ext = np.concatenate([measures_in_ext.right_knee, np.array([1])])
         rknee_in_rhip = np.linalg.inv(T_ext_rhip) @ rknee_in_ext
@@ -553,8 +585,8 @@ class HumanProcess:
         lankle_in_ext = np.concatenate([measures_in_ext.left_ankle, np.array([1])])
         lankle_in_lhip = np.linalg.inv(T_ext_lhip) @ lankle_in_ext
 
-        q_right_leg = self.right_limb_ik(rknee_in_rhip[:-1], rankle_in_rhip[:-1], leg_param)
-        q_left_leg = self.left_limb_ik(lknee_in_lhip[:-1], lankle_in_lhip[:-1], leg_param)
+        q_right_leg = self.right_limb_ik(rknee_in_rhip[:-1], rankle_in_rhip[:-1], leg_param, q_leg_bounds)
+        q_left_leg = self.left_limb_ik(lknee_in_lhip[:-1], lankle_in_lhip[:-1], leg_param, q_leg_bounds)
 
         configuration = np.concatenate([q_trunk, q_right_arm, q_left_arm,
                                         q_right_leg, q_left_leg, q_head])

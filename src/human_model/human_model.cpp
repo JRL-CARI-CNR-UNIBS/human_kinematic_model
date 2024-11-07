@@ -76,7 +76,7 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
   else if (q3b>q3min && q3b<q3max)
     q3=q3b;
   else
-    throw std::runtime_error("No solution for the shoulder rot y within the limits");
+    throw std::runtime_error("No solution for the shoulder rot y within the limits.");
 
   double q6sinq5;
   if (std::sin(q3)>0.5)
@@ -204,16 +204,6 @@ void Human28DOF::trunkIk(const keypoints& measures_in_ext,
   if (chest_q.w() < 0) {
     chest_q.coeffs() *= -1.0;
   }
-
-  // // If all elements of the quaternion are negative, multiply by -1 (equivalent rotation)
-  // if (chest_q.coeffs().minCoeff()<0)
-  //   chest_q.coeffs()*=-1.0;
-
-  // If all elements of the quaternion are negative, multiply by -1 (equivalent rotation)
-  // const auto& coeffs = chest_q.coeffs();
-  // if (coeffs[0] < 0 && coeffs[1] < 0 && coeffs[2] < 0 && coeffs[3] < 0) {
-  //     chest_q.coeffs() *= -1.0;
-  // }
 
   Eigen::Affine3d T_ext_chest;
   T_ext_chest=chest_q;
@@ -519,7 +509,7 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
 
 
   configuration.resize(7+3+4*4+2);
-  configuration.block(0,0,10,1) = q_trunk;
+  configuration.block(0,0,10,1)= q_trunk;
   configuration.block(10,0,4,1)= q_right_arm;
   configuration.block(14,0,4,1)= q_left_arm;
   configuration.block(18,0,4,1)= q_right_leg;
@@ -531,6 +521,16 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   param.block(3,0,2,1)=arm_param;
   param.block(5,0,2,1)=leg_param;
   param.block(7,0,1,1)=head_param;
+}
+
+
+std::pair<Eigen::VectorXd, Eigen::VectorXd> Human28DOF::ik_binding(const keypoints& measures_in_ext,
+                                                                   const std::vector<JointLimits>& joint_limits,
+                                                                   Eigen::VectorXd& configuration,
+                                                                   Eigen::VectorXd& param)
+{
+  Human28DOF::ik(measures_in_ext,joint_limits,configuration,param);
+  return std::make_pair(configuration,param);
 }
 
 
@@ -613,9 +613,9 @@ void Human28DOF::fk(const Eigen::VectorXd& configuration,
   kp_in_ext.left_ankle  =T_ext_lhip     *lwrist_in_lhip     ;
 }
 
-double Human28DOF::keypointDistance(const keypoints& kp1_in_ext,
-                                    const keypoints& kp2_in_ext,
-                                    keypoints& diff_in_ext)
+double keypoints::keypointDistance(const keypoints& kp1_in_ext,
+                                   const keypoints& kp2_in_ext,
+                                   keypoints& diff_in_ext)
 {
   diff_in_ext.head           = kp1_in_ext.head           - kp2_in_ext.head             ;
   diff_in_ext.left_shoulder  = kp1_in_ext.left_shoulder  - kp2_in_ext.left_shoulder    ;
@@ -647,6 +647,70 @@ double Human28DOF::keypointDistance(const keypoints& kp1_in_ext,
   distance+=diff_in_ext.right_ankle   .norm();
   
   return distance;
+}
+
+void keypoints::set_keypoints(const std::map<std::string,
+                              Eigen::Vector3d>& keypoints)
+{
+  head = keypoints.at("head");
+  left_shoulder = keypoints.at("left_shoulder");
+  left_elbow = keypoints.at("left_elbow");
+  left_wrist = keypoints.at("left_wrist");
+  left_hip = keypoints.at("left_hip");
+  left_knee = keypoints.at("left_knee");
+  left_ankle = keypoints.at("left_ankle");
+  right_shoulder = keypoints.at("right_shoulder");
+  right_elbow = keypoints.at("right_elbow");
+  right_wrist = keypoints.at("right_wrist");
+  right_hip = keypoints.at("right_hip");
+  right_knee = keypoints.at("right_knee");
+  right_ankle = keypoints.at("right_ankle");
+}
+
+
+const std::vector<double> keypoints::get_keypoints()
+{
+  std::vector<double> keypoints;
+  auto append_vector = [&keypoints](const Eigen::Vector3d& vec) {
+      keypoints.push_back(vec.x());
+      keypoints.push_back(vec.y());
+      keypoints.push_back(vec.z());
+  };
+
+  append_vector(head);
+  append_vector(left_shoulder);
+  append_vector(left_elbow);
+  append_vector(left_wrist);
+  append_vector(left_hip);
+  append_vector(left_knee);
+  append_vector(left_ankle);
+  append_vector(right_shoulder);
+  append_vector(right_elbow);
+  append_vector(right_wrist);
+  append_vector(right_hip);
+  append_vector(right_knee);
+  append_vector(right_ankle);
+
+  return keypoints;
+}
+
+const std::string keypoints::toString()
+{
+  std::ostringstream oss;
+  oss << "head            = " << head.transpose() << "\n"
+      << "left_shoulder   = " << left_shoulder.transpose() << "\n"
+      << "left_elbow      = " << left_elbow.transpose() << "\n"
+      << "left_wrist      = " << left_wrist.transpose() << "\n"
+      << "left_hip        = " << left_hip.transpose() << "\n"
+      << "left_knee       = " << left_knee.transpose() << "\n"
+      << "left_ankle      = " << left_ankle.transpose() << "\n"
+      << "right_shoulder  = " << right_shoulder.transpose() << "\n"
+      << "right_elbow     = " << right_elbow.transpose() << "\n"
+      << "right_wrist     = " << right_wrist.transpose() << "\n"
+      << "right_hip       = " << right_hip.transpose() << "\n"
+      << "right_knee      = " << right_knee.transpose() << "\n"
+      << "right_ankle     = " << right_ankle.transpose() << "\n";
+  return oss.str();
 }
 
 

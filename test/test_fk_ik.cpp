@@ -1,3 +1,4 @@
+#include <chrono>
 #include <human_model/human_model.hpp>
 
 int main(int argc, char *argv[])
@@ -28,6 +29,9 @@ int main(int argc, char *argv[])
   qbounds[16]=human_model::JointLimits(-M_PI/2,M_PI/2); // left shoulder
   qbounds[20]=human_model::JointLimits(-M_PI/2,M_PI/2); // right hip
   qbounds[24]=human_model::JointLimits(-M_PI/2,M_PI/2); // left hip 
+
+  // Start timing
+  auto start = std::chrono::high_resolution_clock::now();
 
   // Test the fk and ik functions
   for (size_t idx=0; idx<1e4; idx++)
@@ -75,24 +79,31 @@ int main(int argc, char *argv[])
 
     human_model::Human28DOF::fk(q2,param2,kp2_in_ext);
     
-    double kpt_distance = human_model::Human28DOF::keypointDistance(kp_in_ext,kp2_in_ext,diff_in_ext);
+    double kpt_distance = human_model::keypoints::keypointDistance(kp_in_ext,kp2_in_ext,diff_in_ext);
     double q_distance = (q-q2).norm();
     double param_distance = (param-param2).norm();
 
     std::cout << "\nq2 [after fk]           : \n" << q2.transpose() << std::endl;
     std::cout << "\ndiff q      : \n" << (q-q2).transpose() << std::endl;
     std::cout << "\nparam2 [after fk]       : \n" << param2.transpose() << std::endl;
-    std::cout << "\ndiff param  : \n" << (param-param2).norm() << std::endl;
+    std::cout << "\ndiff param  : \n" << (param-param2).transpose() << std::endl;
 
     std::cout << "\nkp          : \n" << kp_in_ext << std::endl;
     std::cout << "\nkp2         : \n" << kp2_in_ext << std::endl;
     std::cout << "\nkp diff     : \n" << diff_in_ext << std::endl;
-    std::cout << "\nkeypoint distance: " << kpt_distance << std::endl;
-    std::cout << "\nconfiguration distance: " << q_distance << std::endl;
-    std::cout << "\nparam distance: " << param_distance << std::endl << std::endl;
+    std::cout << "\nkeypoint distance: \n" << kpt_distance << std::endl;
+    std::cout << "\nconfiguration distance: \n" << q_distance << std::endl;
+    std::cout << "\nparam distance: \n" << param_distance << std::endl << std::endl;
 
     assert(("keypoint distance is greater than threshold",kpt_distance<1e-8));
     assert(("configuration difference is greater than threshold",q_distance<1e-8));
     assert(("param difference is greater than threshold",param_distance<1e-8));
   }
+
+  // End timing
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed = end - start;
+  std::cout << "Total execution time: " << elapsed.count() << " seconds" << std::endl;
+
+  return 0;
 }
