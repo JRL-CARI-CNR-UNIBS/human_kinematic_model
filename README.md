@@ -36,7 +36,7 @@
 
 
 ## Speedtest
-Average time taken to run **10k times** the `test_fk_ik.cpp` or `test_fk_ik.py` or `test_fk_ik_bindings.py` script:
+Average time taken to run the `test_fk_ik.cpp` or `test_fk_ik.py` or `test_fk_ik_bindings.py` script that executes **10k times** the loop (direct kinematics -> inverse kinematics -> direct kinematics):
 - C++ (Release): **4.2 s**
 - C++ (Debug): **8.3 s**
 - Python (pure): **24.0 s**
