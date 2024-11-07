@@ -33,3 +33,11 @@
     ```
 
     This will allow you to import the `human_model_binding` python module and let it find the C++ `libhuman_model.so` shared library.
+
+
+## Speedtest
+Average time taken to run **10k times** the `test_fk_ik.cpp` or `test_fk_ik.py` or `test_fk_ik_bindings.py` script:
+- C++ (Release): **4.2 s**
+- C++ (Debug): **8.3 s**
+- Python (pure): **24.0 s**
+- Python (bindings): **6.5 s**
