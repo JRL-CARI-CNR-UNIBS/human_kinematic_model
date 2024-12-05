@@ -31,8 +31,8 @@ find_package(rdyn_core REQUIRED)
 #cnr_enable_testing(ENABLE_TESTING ENABLE_COVERAGE)
 
 find_package(Python COMPONENTS REQUIRED
-              Interpreter  # for the installation of the python package
-              Development # for the c++ -> python bindings
+             Interpreter  # for the installation of the python package
+             Development # for the c++ -> python bindings
 )
 find_package(pybind11 CONFIG)
 
@@ -49,23 +49,23 @@ endif()
 #################
 ## Build       ##
 #################
-
-add_library(human_model  SHARED
+# Define the library
+add_library(human_model SHARED
   src/human_model/human_model.cpp)
-target_include_directories(human_model
-  PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> #if BUILD_INTERFACE, add ${CMAKE_SOURCE_DIR}/include (headers taken by source directory)
-    $<INSTALL_INTERFACE:include> # if INSTALL_INTERFACE, add header from install path
-  )
-#target_compile_definitions(human_model
-#  PUBLIC
-#  )
 
+# Set the include directories
+target_include_directories(human_model PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> #if BUILD_INTERFACE, add ${CMAKE_SOURCE_DIR}/include (headers taken by source directory)
+  $<INSTALL_INTERFACE:include> # if INSTALL_INTERFACE, add header from install path
+)
+
+# Link other libraries
 target_link_libraries(human_model
   PUBLIC
   rdyn_core::rdyn_core
 )
 
+# Create an alias
 add_library(human_model::human_model ALIAS human_model)
 
 
@@ -78,6 +78,19 @@ add_library(human_model::human_model ALIAS human_model)
 
 # Python bindings
 pybind11_add_module(human_model_binding src/human_model/bindings.cpp)
+
+# Set the include directories
+target_include_directories(human_model_binding PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> #if BUILD_INTERFACE, add ${CMAKE_SOURCE_DIR}/include (headers taken by source directory)
+  $<INSTALL_INTERFACE:include> # if INSTALL_INTERFACE, add header from install path
+)
+
+# Link other libraries
+target_link_libraries(human_model_binding
+  PRIVATE
+  rdyn_core::rdyn_core
+)
+
 target_link_libraries(human_model_binding PRIVATE human_model)
 
 # if(BUILD_EXAMPLE)
@@ -96,11 +109,13 @@ target_link_libraries(human_model_binding PRIVATE human_model)
 ### #############
 ### ## Install ##
 ### #############
+# Install the include directory
+install(
+  DIRECTORY include/human_model
+  DESTINATION include
+)
 
-
-install(DIRECTORY include/human_model
-  DESTINATION include)
-
+# Install the library
 install(
   TARGETS
     human_model
@@ -111,22 +126,30 @@ install(
   RUNTIME DESTINATION bin/human_model
 )
 
+# Install the export so that other CMake projects can find the library
 install(EXPORT human_modelTargets
   DESTINATION "share/human_model/cmake"
   NAMESPACE human_model::
   FILE human_modelTargets.cmake
 )
 
-
+# Create a package configuration file and version file + install them
 include(CMakePackageConfigHelpers)
-write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/human_modelConfigVersion.cmake
-  VERSION 0.0.1
-  COMPATIBILITY AnyNewerVersion)
-
-install(FILES
-  ${CMAKE_SOURCE_DIR}/cmake_config/human_modelConfig.cmake
+write_basic_package_version_file(
   ${CMAKE_CURRENT_BINARY_DIR}/human_modelConfigVersion.cmake
-  DESTINATION "share/human_model/cmake")
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY AnyNewerVersion
+)
+configure_package_config_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/human_modelConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/human_modelConfig.cmake
+  INSTALL_DESTINATION "share/human_model/cmake"
+)
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/human_modelConfig.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/human_modelConfigVersion.cmake
+  DESTINATION "share/human_model/cmake"
+)
 
 # Install the Python package in development mode (live changes)
 execute_process(COMMAND ${Python_EXECUTABLE} -m pip install ${_pip_args} -e ${CMAKE_CURRENT_LIST_DIR})
