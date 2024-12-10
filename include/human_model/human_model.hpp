@@ -110,6 +110,23 @@ public:
                  const Eigen::VectorXd& param,
                  keypoints& kp_in_ext);
 
+  static void fk_tfs(const Eigen::VectorXd& configuration,
+                     const Eigen::VectorXd& param,
+                     Eigen::Affine3d& T_ext_rshoulder,
+                     Eigen::Affine3d& T_ext_lshoulder,
+                     Eigen::Affine3d& T_ext_rhip,
+                     Eigen::Affine3d& T_ext_lhip,
+                     Eigen::Affine3d& T_ext_chest,
+                     Eigen::Affine3d& T_ext_head,
+                     Eigen::Affine3d& T_ext_relbow,
+                     Eigen::Affine3d& T_ext_rwrist,
+                     Eigen::Affine3d& T_ext_lelbow,
+                     Eigen::Affine3d& T_ext_lwrist,
+                     Eigen::Affine3d& T_ext_rknee,
+                     Eigen::Affine3d& T_ext_rankle,
+                     Eigen::Affine3d& T_ext_lknee,
+                     Eigen::Affine3d& T_ext_lankle);
+
 
   static void trunkIk(const keypoints& measures_in_ext,
                        Eigen::VectorXd& q,

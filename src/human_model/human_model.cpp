@@ -613,6 +613,87 @@ void Human28DOF::fk(const Eigen::VectorXd& configuration,
   kp_in_ext.left_ankle  =T_ext_lhip     *lwrist_in_lhip     ;
 }
 
+
+void Human28DOF::fk_tfs(const Eigen::VectorXd& configuration,
+                        const Eigen::VectorXd& param,
+                        Eigen::Affine3d& T_ext_rshoulder,
+                        Eigen::Affine3d& T_ext_lshoulder,
+                        Eigen::Affine3d& T_ext_rhip,
+                        Eigen::Affine3d& T_ext_lhip,
+                        Eigen::Affine3d& T_ext_chest,
+                        Eigen::Affine3d& T_ext_head,
+                        Eigen::Affine3d& T_ext_relbow,
+                        Eigen::Affine3d& T_ext_rwrist,
+                        Eigen::Affine3d& T_ext_lelbow,
+                        Eigen::Affine3d& T_ext_lwrist,
+                        Eigen::Affine3d& T_ext_rknee,
+                        Eigen::Affine3d& T_ext_rankle,
+                        Eigen::Affine3d& T_ext_lknee,
+                        Eigen::Affine3d& T_ext_lankle)
+{
+  Eigen::VectorXd q_trunk      = configuration.block(0,0,10,1) ;
+  Eigen::VectorXd q_right_arm  = configuration.block(10,0,4,1);
+  Eigen::VectorXd q_left_arm   = configuration.block(14,0,4,1);
+  Eigen::VectorXd q_right_leg  = configuration.block(18,0,4,1);
+  Eigen::VectorXd q_left_leg   = configuration.block(22,0,4,1);
+  Eigen::VectorXd q_head       = configuration.block(26,0,2,1);
+
+  Eigen::VectorXd trunk_param  = param.block(0,0,3,1);
+  Eigen::VectorXd arm_param    = param.block(3,0,2,1);
+  Eigen::VectorXd leg_param    = param.block(5,0,2,1);
+  Eigen::VectorXd head_param   = param.block(7,0,1,1);
+
+  trunkFk(q_trunk,
+          trunk_param,
+          T_ext_rshoulder,
+          T_ext_lshoulder,
+          T_ext_rhip,
+          T_ext_lhip,
+          T_ext_chest);
+  headFk(q_head,head_param,T_ext_chest,T_ext_head);
+
+  Eigen::Vector3d relbow_in_rshoulder;
+  Eigen::Vector3d rwrist_in_rshoulder;
+
+  Eigen::Vector3d lelbow_in_lshoulder;
+  Eigen::Vector3d lwrist_in_lshoulder;
+
+  rightLimbFk(q_right_arm,
+              arm_param,
+              relbow_in_rshoulder,
+              rwrist_in_rshoulder);
+  leftLimbFk(q_left_arm,
+             arm_param,
+             lelbow_in_lshoulder,
+             lwrist_in_lshoulder);
+
+  T_ext_relbow = T_ext_rshoulder*Eigen::Translation3d(relbow_in_rshoulder);
+  T_ext_rwrist = T_ext_rshoulder*Eigen::Translation3d(rwrist_in_rshoulder);
+  T_ext_lelbow = T_ext_lshoulder*Eigen::Translation3d(lelbow_in_lshoulder);
+  T_ext_lwrist = T_ext_lshoulder*Eigen::Translation3d(lwrist_in_lshoulder);
+
+  Eigen::Vector3d relbow_in_rhip;
+  Eigen::Vector3d rwrist_in_rhip;
+
+  Eigen::Vector3d lelbow_in_lhip;
+  Eigen::Vector3d lwrist_in_lhip;
+
+  rightLimbFk(q_right_leg,
+              leg_param,
+              relbow_in_rhip,
+              rwrist_in_rhip);
+  leftLimbFk(q_left_leg,
+             leg_param,
+             lelbow_in_lhip,
+             lwrist_in_lhip);
+
+  T_ext_rknee = T_ext_rhip*Eigen::Translation3d(relbow_in_rhip);
+  T_ext_rankle = T_ext_rhip*Eigen::Translation3d(rwrist_in_rhip);
+  T_ext_lknee = T_ext_lhip*Eigen::Translation3d(lelbow_in_lhip);
+  T_ext_lankle = T_ext_lhip*Eigen::Translation3d(lwrist_in_lhip);
+}
+
+
 double keypoints::keypointDistance(const keypoints& kp1_in_ext,
                                    const keypoints& kp2_in_ext,
                                    keypoints& diff_in_ext)
