@@ -30,11 +30,11 @@ find_package(rdyn_core REQUIRED)
 
 #cnr_enable_testing(ENABLE_TESTING ENABLE_COVERAGE)
 
-find_package(Python COMPONENTS REQUIRED
+find_package(Python REQUIRED COMPONENTS 
              Interpreter  # for the installation of the python package
              Development # for the c++ -> python bindings
 )
-find_package(pybind11 CONFIG)
+find_package(pybind11 REQUIRED CONFIG)
 
 # detect virtualenv and set Pip args accordingly
 if(DEFINED ENV{VIRTUAL_ENV} OR DEFINED ENV{CONDA_PREFIX})
@@ -89,9 +89,8 @@ target_include_directories(human_model_binding PRIVATE
 target_link_libraries(human_model_binding
   PRIVATE
   rdyn_core::rdyn_core
+  human_model::human_model
 )
-
-target_link_libraries(human_model_binding PRIVATE human_model)
 
 # if(BUILD_EXAMPLE)
 # ## example of usage
