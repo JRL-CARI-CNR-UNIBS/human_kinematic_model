@@ -182,7 +182,7 @@ void Human28DOF::trunkIk(const keypoints& measures_in_ext,
   Eigen::Vector3d shoulder_versor_in_ext=(measures_in_ext.left_shoulder-measures_in_ext.right_shoulder).normalized();
 
 
-  shoulder_distance= (measures_in_ext.left_shoulder-measures_in_ext.right_shoulder).norm();
+  shoulder_distance=(measures_in_ext.left_shoulder-measures_in_ext.right_shoulder).norm();
   chest_hip_distance=(upper_chest-lower_chest).norm();
   hip_distance=(measures_in_ext.left_hip-measures_in_ext.right_hip).norm();
 
