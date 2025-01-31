@@ -29,13 +29,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <rdyn_core/primitives.h>
-
-
+#include <map>
 
 
 namespace human_model
 {
-
 
 
 struct keypoints
@@ -50,8 +48,6 @@ struct keypoints
   Eigen::Vector3d left_knee;
   Eigen::Vector3d left_ankle;
 
-
-
   Eigen::Vector3d right_shoulder;
   Eigen::Vector3d right_elbow;
   Eigen::Vector3d right_wrist;
@@ -60,14 +56,35 @@ struct keypoints
   Eigen::Vector3d right_knee;
   Eigen::Vector3d right_ankle;
 
+  static double keypointDistance(const keypoints& kp1_in_ext,
+                                 const keypoints& kp2_in_ext,
+                                 keypoints& diff_in_ext);
+
+  void set_keypoints(const std::map<std::string,
+                     Eigen::Vector3d>& keypoints);
+
+  const std::vector<double> get_keypoints();
+
+  const std::string toString();
+
+};
+
+
+struct JointLimits
+{
+  double min_;
+  double max_;
+
+  public:
+    JointLimits(double min, double max) : min_(min), max_(max) {};
 };
 
 
 class Human28DOF
 {
-protected:
-  Eigen::VectorXd configurations_;
-  Eigen::VectorXd velocities_;
+// protected:
+//   Eigen::VectorXd configurations_;
+//   Eigen::VectorXd velocities_;
 
 
 public:
@@ -79,27 +96,50 @@ public:
    * @param configuration: human configuration
    */
   static void ik(const keypoints& measures_in_ext,
+                 const std::vector<JointLimits>& joint_limits,
                  Eigen::VectorXd& configuration,
                  Eigen::VectorXd& param);
+
+  // Used to return values beyond modifying the input arguments
+  static std::pair<Eigen::VectorXd, Eigen::VectorXd> ik_binding(const keypoints& measures_in_ext,
+                                                                const std::vector<JointLimits>& joint_limits,
+                                                                Eigen::VectorXd& configuration,
+                                                                Eigen::VectorXd& param);
+
   static void fk(const Eigen::VectorXd& configuration,
                  const Eigen::VectorXd& param,
-                 keypoints& kp_in_ext) ;
+                 keypoints& kp_in_ext);
 
-  static double keypointDistance(const keypoints& kp1_in_ext,
-                               const keypoints& kp2_in_ext,
-                               keypoints& diff_in_ext);
+  static void fk_tfs(const Eigen::VectorXd& configuration,
+                     const Eigen::VectorXd& param,
+                     Eigen::Affine3d& T_ext_rshoulder,
+                     Eigen::Affine3d& T_ext_lshoulder,
+                     Eigen::Affine3d& T_ext_rhip,
+                     Eigen::Affine3d& T_ext_lhip,
+                     Eigen::Affine3d& T_ext_chest,
+                     Eigen::Affine3d& T_ext_head,
+                     Eigen::Affine3d& T_ext_relbow,
+                     Eigen::Affine3d& T_ext_rwrist,
+                     Eigen::Affine3d& T_ext_lelbow,
+                     Eigen::Affine3d& T_ext_lwrist,
+                     Eigen::Affine3d& T_ext_rknee,
+                     Eigen::Affine3d& T_ext_rankle,
+                     Eigen::Affine3d& T_ext_lknee,
+                     Eigen::Affine3d& T_ext_lankle);
 
-  static void trunckIk(const keypoints& measures_in_ext,
-                        Eigen::VectorXd& q,
-                        Eigen::VectorXd& param);
 
-  static void trunckFk(const Eigen::VectorXd& q,
+  static void trunkIk(const keypoints& measures_in_ext,
+                       Eigen::VectorXd& q,
+                       Eigen::VectorXd& param);
+
+  static void trunkFk(const Eigen::VectorXd& q,
                        const Eigen::VectorXd& param,
                        Eigen::Affine3d &T_ext_rshoulder,
                        Eigen::Affine3d &T_ext_lshoulder,
                        Eigen::Affine3d &T_ext_rhip,
                        Eigen::Affine3d &T_ext_lhip,
                        Eigen::Affine3d &T_ext_chest);
+
 
   static void headFk(const Eigen::VectorXd& q,
                      const Eigen::VectorXd& param,
@@ -112,31 +152,32 @@ public:
                      Eigen::VectorXd& param);
 
 
-  static void rightLimbFk(  const Eigen::VectorXd& qarm,
-                              const Eigen::VectorXd& param,
-                              Eigen::Vector3d& elbow_in_limb,
-                              Eigen::Vector3d& wrist_in_limb);
+  static void rightLimbFk(const Eigen::VectorXd& qarm,
+                          const Eigen::VectorXd& param,
+                          Eigen::Vector3d& elbow_in_limb,
+                          Eigen::Vector3d& wrist_in_limb);
 
-
-  static void leftLimbFk(  const Eigen::VectorXd& qarm,
-                             const Eigen::VectorXd& param,
-                             Eigen::Vector3d& elbow_in_limb,
-                             Eigen::Vector3d& wrist_in_limb);
+  static void leftLimbFk(const Eigen::VectorXd& qarm,
+                         const Eigen::VectorXd& param,
+                         Eigen::Vector3d& elbow_in_limb,
+                         Eigen::Vector3d& wrist_in_limb);
 
   static void rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
-                             const Eigen::Vector3d& wrist_in_limb,
-                            const Eigen::VectorXd& param,
-                              Eigen::VectorXd& qarm);
-
+                          const Eigen::Vector3d& wrist_in_limb,
+                          const Eigen::VectorXd& param,
+                          const std::vector<JointLimits>& qarm_bounds,
+                          Eigen::VectorXd& qarm);
 
   static void leftLimbIk(const Eigen::Vector3d& elbow_in_limb,
-                           const Eigen::Vector3d& wrist_in_limb,
-                           const Eigen::VectorXd& param,
-                              Eigen::VectorXd& qarm);
+                         const Eigen::Vector3d& wrist_in_limb,
+                         const Eigen::VectorXd& param,
+                         const std::vector<JointLimits>& qarm_bounds,
+                         Eigen::VectorXd& qarm);
+
 
   static void print(const Eigen::VectorXd& q,
                     const Eigen::VectorXd& param);
-  friend std::ostream& operator<<(std::ostream& os, const keypoints& keypoints);
+  // friend std::ostream& operator<<(std::ostream& os, const keypoints& keypoints); // is this function ever used?
 
 };
 

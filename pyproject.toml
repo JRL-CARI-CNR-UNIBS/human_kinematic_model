@@ -1,0 +1,23 @@
+[build-system]
+requires = [
+    "setuptools>=61.0.0",
+    "wheel",
+    "pybind11",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "human_model"
+version = "0.0.1"
+description = "A human model package"
+authors = [
+    { name = "Michele Ferrari", email = "michele.ferrari@unibs.it" }
+]
+dependencies = [
+    # List your dependencies here
+    "numpy",
+    "scipy",
+]
+
+[tool.setuptools.packages.find]
+where = ["scripts"]
