@@ -45,5 +45,4 @@ PYBIND11_MODULE(human_model_binding, m) {
         .def_static("rightLimbIk", &Human28DOF::rightLimbIk)
         .def_static("leftLimbIk", &Human28DOF::leftLimbIk)
         .def_static("print", &Human28DOF::print);
-
 }

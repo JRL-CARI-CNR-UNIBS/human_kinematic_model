@@ -281,6 +281,14 @@ def truck_sym_fk():
     print(f"HIP versor z -> y = {T02[1,2]}")
     print(f"HIP versor z -> z = {T02[2,2]}")
 
+    # Hip position in 2 (tranlation along y axis by 0.5*hip_distance)
+    hip_in_2 = sym.Matrix([0,0.5*h_d,0,1])
+    hip_in_0 = T02*hip_in_2
+
+    print(f"\nLeft hip: x={hip_in_0[0]}")
+    print(f"Left hip: y={hip_in_0[1]}")
+    print(f"Left hip: z={hip_in_0[2]}")
+
 
 def main():
     test_trunk_fk()
@@ -288,3 +296,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    truck_sym_fk()

@@ -31,62 +31,226 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace human_model
 {
 
+void Human28DOF::computeWristIn2(const Eigen::Vector2d& qshoulder,
+                                 const Eigen::Vector3d& wrist_in_limb,
+                                 Eigen::Vector3d& wrist_in_2)
+{
+  Eigen::AngleAxisd rot01(qshoulder(0), Eigen::Vector3d::UnitZ());
+  Eigen::AngleAxisd rot12(qshoulder(1), Eigen::Vector3d::UnitX());
+
+  Eigen::Affine3d T01(rot01);
+  Eigen::Affine3d T12(rot12);
+
+  Eigen::Affine3d T02=T01*T12;
+
+  Eigen::Vector3d wrist_in_2=T02.inverse()*wrist_in_limb;
+}
+
+
+bool Human28DOF::shoulderIk(const Eigen::Vector3d& elbow_in_limb,
+                            const std::vector<JointLimits>& qshoulder_bounds,
+                            bool first_solution,
+                            Eigen::Vector2d& qshoulder)
+{
+  // Configuration
+  double& q1=qshoulder(0);  // shoulder rot z
+  double& q2=qshoulder(1);  // shoulder rot x
+
+  // Joint limits
+  double q1min=qshoulder_bounds[0].min_; // shoulder rot z lower bound
+  double q1max=qshoulder_bounds[0].max_; // shoulder rot z upper bound
+  double q2min=qshoulder_bounds[1].min_; // shoulder rot x lower bound
+  double q2max=qshoulder_bounds[1].max_; // shoulder rot x upper bound
+
+  // q1: SHOULDER ROT Z
+  if (first_solution)
+    // Solution 1: Hypothesis -PI/2<q2<PI/2 (cos(q2)>0)
+    q1=std::atan2(-elbow_in_limb(0),elbow_in_limb(1));
+  else
+    // Solution 2: Hypothesis -PI<q2<-PI/2 or PI/2<q2<PI (cos(q2)<0)
+    q1=std::atan2(elbow_in_limb(0),-elbow_in_limb(1));
+    
+  // q2: SHOULDER ROT X
+  if (std::abs(std::sin(q1))>0.5)
+    q2=std::atan2(elbow_in_limb(2),-elbow_in_limb(0)/std::sin(q1));
+  else
+    q2=std::atan2(elbow_in_limb(2),elbow_in_limb(1)/std::cos(q1));
+
+  // check if the solution is within the joint limits
+  bool valid_solution=(q1>q1min && q1<q1max && q2>q2min && q2<q2max);
+  
+  // check if the solution is valid
+  if (first_solution)
+    // (cos(q2)>0)
+    valid_solution=valid_solution && (std::cos(q2)>0);
+  else
+    // (cos(q2)<0)
+    valid_solution=valid_solution && (std::cos(q2)<0);
+
+  // Assing nan if the solution is not valid
+  q1 = valid_solution ? q1 : std::nan("");
+  q2 = valid_solution ? q2 : std::nan("");
+
+  return valid_solution;
+}
+
+
+bool Human28DOF::elbowIk(const Eigen::Vector3d& wrist_in_limb,
+                         const std::vector<JointLimits>& qelbow_bounds,
+                         bool first_solution,
+                         Eigen::Vector2d& qelbow)
+{
+  // Solution 1: Hypothesis  0<q5<PI (sin(q5)>0)
+  double q6cosq5 = wrist_in_2(1)-q4;
+
+  double q3a=std::atan2(wrist_in_2(2),-wrist_in_2(0));
+  double q5a; 
+  if (std::abs(std::sin(q3a))>0.5)
+    q5a=std::atan2(wrist_in_2(2)/std::sin(q3a),q6cosq5);
+  else
+    q5a=std::atan2(-wrist_in_2(0)/std::cos(q3a),q6cosq5);
+
+  // check if the solution is valid (sin(q5)>0)
+  sol_a_valid=(std::sin(q5a)>0 && q3a>q3min && q3a<q3max && q5a>q5min && q5a<q5max);
+  q3 = sol_a_valid ? q3a : std::nan("");
+  q5 = sol_a_valid ? q5a : std::nan("");
+
+  if (!sol_a_valid)
+  {
+    // Solution 2: Hypothesis -PI<q5<0 (sin(q5)<0)
+    double q3b=std::atan2(-wrist_in_2(2),wrist_in_2(0));
+    double q5b;
+    if (std::abs(std::sin(q3b))>0.5)
+      q5b=std::atan2(wrist_in_2(2)/std::sin(q3b),q6cosq5);
+    else
+      q5b=std::atan2(-wrist_in_2(0)/std::cos(q3b),q6cosq5);
+
+    // check if the solution is valid (sin(q5)<0)
+    bool sol_b_valid=(std::sin(q5b)<0 && q3b>q3min && q3b<q3max && q5b>q5min && q5b<q5max);
+    q3 = sol_b_valid ? q3b : std::nan("");
+    q5 = sol_b_valid ? q5b : std::nan("");}
+}
+
+
 void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
                              const Eigen::Vector3d& wrist_in_limb,
                              const Eigen::VectorXd& param,
                              const std::vector<JointLimits>& qarm_bounds,
                              Eigen::VectorXd& qarm)
 {
+  // Configuration
   double& q1=qarm(0);  // shoulder rot z
   double& q2=qarm(1);  // shoulder rot x
   double& q3=qarm(2);  // shoulder rot y
   double& q5=qarm(3);  // elbow rot z
 
+  // Parameters
   const double& q4=param(0);  // upper arm length
   const double& q6=param(1);  // lower arm length
 
-  double q3min=qarm_bounds[2].min_; // shoulder rot y lower bound
-  double q3max=qarm_bounds[2].max_; // shoulder rot y upper bound
+  // Joint limits
+  std::vector<JointLimits> q_shoulder_bounds = {
+    qarm_bounds[0], // shoulder rot z
+    qarm_bounds[1]  // shoulder rot x
+  };
 
-  q1=std::atan2(-elbow_in_limb(0),elbow_in_limb(1));
-  if (std::abs(std::sin(q1))>0.5)
-    q2=std::atan2(elbow_in_limb(2),-elbow_in_limb(0)/std::sin(q1));
+  std::vector<JointLimits> q_elbow_bounds = {
+    qarm_bounds[2], // shoulder rot y 
+    qarm_bounds[3]  // elbow rot z
+  };
+
+  // ### ELBOW IN LIMB FRAME ###
+  Eigen::Vector2d q_a, q_b;
+  bool valid_sol_a=shoulderIk(elbow_in_limb,q_shoulder_bounds,true,q_a);  // first solution
+  bool valid_sol_b=shoulderIk(elbow_in_limb,q_shoulder_bounds,false,q_b); // second solution
+
+  // Throw exception if there is no solution with the
+  // SHOULDER ROT Z and SHOULDER ROT X within the limits
+  if (!valid_sol_a && !valid_sol_b)
+    throw std::runtime_error("No solution for the SHOULDER ROT Z and SHOULDER ROT X within the limits.");
+  // ### END ELBOW IN LIMB FRAME ###
+
+  // ### WRIST IN FRAME #2 ###
+  Eigen::Vector3d wrist_in_2_a;
+  Eigen::Vector3d wrist_in_2_b;
+  computeWristIn2(q_a,wrist_in_limb,wrist_in_2_a);
+  computeWristIn2(q_b,wrist_in_limb,wrist_in_2_b);
+
+  // Compute the two solutions for the ELBOW for each of the two solutions for the SHOULDER
+  Eigen::Vector2d q_elbow_aa, q_elbow_ab, q_elbow_ba, q_elbow_bb;
+  bool valid_sol_aa=elbowIk(wrist_in_2_a,q_elbow_bounds,true,q_elbow_aa);  // first solution for q_a
+  bool valid_sol_ab=elbowIk(wrist_in_2_a,q_elbow_bounds,false,q_elbow_ab); // second solution for q_a
+  bool valid_sol_ba=elbowIk(wrist_in_2_b,q_elbow_bounds,true,q_elbow_ba);  // first solution for q_b
+  bool valid_sol_bb=elbowIk(wrist_in_2_b,q_elbow_bounds,false,q_elbow_bb); // second solution for q_b
+  
+  // Throw exception if there is no solution with the
+  // SHOULDER ROT Y and ELBOW ROT Z within the limits
+  if (!valid_sol_aa && !valid_sol_ab && !valid_sol_ba && !valid_sol_bb)
+    throw std::runtime_error("No solution for the SHOULDER ROT Y and ELBOW ROT Z within the limits.");
+  // ### END WRIST IN FRAME #2 ###
+
+  // Select q1, q2, q3, q5 based on the valid solutions
+  if (valid_sol_aa && valid_sol_a)
+  {
+    q1=q_a(0);
+    q2=q_a(1);
+    q3=q_elbow_aa(0);
+    q5=q_elbow_aa(1);
+  }
+  else if (valid_sol_aa && valid_sol_b)
+  {
+    q1=q_b(0);
+    q2=q_b(1);
+    q3=q_elbow_aa(0);
+    q5=q_elbow_aa(1);
+  }
+  else if (valid_sol_ab && valid_sol_a)
+  {
+    q1=q_a(0);
+    q2=q_a(1);
+    q3=q_elbow_ab(0);
+    q5=q_elbow_ab(1);
+  }
+  else if (valid_sol_ab && valid_sol_b)
+  {
+    q1=q_b(0);
+    q2=q_b(1);
+    q3=q_elbow_ab(0);
+    q5=q_elbow_ab(1);
+  }
+  else if (valid_sol_ba && valid_sol_a)
+  {
+    q1=q_a(0);
+    q2=q_a(1);
+    q3=q_elbow_ba(0);
+    q5=q_elbow_ba(1);
+  }
+  else if (valid_sol_ba && valid_sol_b)
+  {
+    q1=q_b(0);
+    q2=q_b(1);
+    q3=q_elbow_ba(0);
+    q5=q_elbow_ba(1);
+  }
+  else if (valid_sol_bb && valid_sol_a)
+  {
+    q1=q_a(0);
+    q2=q_a(1);
+    q3=q_elbow_bb(0);
+    q5=q_elbow_bb(1);
+  }
+  else if (valid_sol_bb && valid_sol_b)
+  {
+    q1=q_b(0);
+    q2=q_b(1);
+    q3=q_elbow_bb(0);
+    q5=q_elbow_bb(1);
+  }
   else
-    q2=std::atan2(elbow_in_limb(2),elbow_in_limb(1)/std::cos(q1));
-
-  Eigen::AngleAxisd rot01(q1,Eigen::Vector3d::UnitZ());
-  Eigen::AngleAxisd rot12(q2,Eigen::Vector3d::UnitX());
-
-  Eigen::Affine3d T01;
-  T01=rot01;
-
-  Eigen::Affine3d T12;
-  T12=rot12;
-
-  Eigen::Affine3d T02=T01*T12;
-
-  Eigen::Vector3d wrist_in_2=T02.inverse()*wrist_in_limb;
-
-  double q3a(std::atan2(wrist_in_2(2),-wrist_in_2(0)));
-  double q3b(std::atan2(-wrist_in_2(2),wrist_in_2(0)));
-
-  // Select the solution with the shoulder rot y within the limits
-  if (q3a>q3min && q3a<q3max)
-    q3=q3a;
-  else if (q3b>q3min && q3b<q3max)
-    q3=q3b;
-  else
-    throw std::runtime_error("No solution for the shoulder rot y within the limits.");
-
-  double q6sinq5;
-  if (std::sin(q3)>0.5)
-    q6sinq5=wrist_in_2(2)/std::sin(q3);
-  else
-    q6sinq5=-wrist_in_2(0)/std::cos(q3);
-
-  double q6cosq5=wrist_in_2(1)-q4;
-
-  q5=std::atan2(q6sinq5,q6cosq5);
+  {
+    q1, q2, q3, q5 = std::nan("");
+    throw std::runtime_error("No solution for the SHOULDER ROT Z, SHOULDER ROT X, SHOULDER ROT Y, and ELBOW ROT Z within the limits.");
+  }
 }
 
 
@@ -148,6 +312,49 @@ void Human28DOF::rightLimbFk(const Eigen::VectorXd& qarm,
   wrist_in_limb=T06.translation();
 }
 
+void Human28DOF::rightLimbFk_tfs(const Eigen::VectorXd& qarm,
+                                 const Eigen::VectorXd& param,
+                                 Eigen::Affine3d& T_limb_shoulderRotated,
+                                 Eigen::Affine3d& T_limb_elbow,
+                                 Eigen::Affine3d& T_limb_wrist)
+{
+  const double& q1=qarm(0);   // shoulder rot z
+  const double& q2=qarm(1);   // shoulder rot x
+  const double& q3=qarm(2);   // shoulder rot y
+  const double& q5=qarm(3);   // elbow rot z
+  const double& q4=param(0);  // upper arm length
+  const double& q6=param(1);  // lower arm length
+
+  Eigen::AngleAxisd rot01(q1,Eigen::Vector3d::UnitZ());
+  Eigen::Affine3d T01;
+  T01=rot01;
+
+  Eigen::AngleAxisd rot12(q2,Eigen::Vector3d::UnitX());
+  Eigen::Affine3d T12;
+  T12=rot12;
+
+  Eigen::AngleAxisd rot23(q3,Eigen::Vector3d::UnitY());
+  Eigen::Affine3d T23;
+  T23=rot23;
+
+  T_limb_shoulderRotated = T01*T12*T23;
+
+  Eigen::Affine3d T34; // translation along y
+  T34.setIdentity();
+  T34.translation()(1)=q4;
+
+  Eigen::AngleAxisd rot45(q5,Eigen::Vector3d::UnitZ());
+  Eigen::Affine3d T45;
+  T45=rot45;
+
+  Eigen::Affine3d T56; // translation along y
+  T56.setIdentity();
+  T56.translation()(1)=q6;
+
+  T_limb_elbow=T_limb_shoulderRotated*T34;
+  T_limb_wrist=T_limb_elbow*T45*T56;
+}
+
 
 void Human28DOF::leftLimbFk(const Eigen::VectorXd& qarm,
                             const Eigen::VectorXd& param,
@@ -159,44 +366,72 @@ void Human28DOF::leftLimbFk(const Eigen::VectorXd& qarm,
   wrist_in_limb(2)*=-1.0;
 }
 
+void Human28DOF::leftLimbFk_tfs(const Eigen::VectorXd& qarm,
+                                const Eigen::VectorXd& param,
+                                Eigen::Affine3d& T_limb_shoulderRotated,
+                                Eigen::Affine3d& T_limb_elbow,
+                                Eigen::Affine3d& T_limb_wrist)
+{
+  Human28DOF::rightLimbFk_tfs(qarm,param,T_limb_shoulderRotated,T_limb_elbow,T_limb_wrist);
+  // Invert the z coordinate
+  T_limb_shoulderRotated.translation()(2)*=-1.0;
+  T_limb_elbow.translation()(2)*=-1.0;
+  T_limb_wrist.translation()(2)*=-1.0;
+
+}
+
 
 void Human28DOF::trunkIk(const keypoints& measures_in_ext,
+                         const std::vector<JointLimits>& qtrunk_bounds,
                          Eigen::VectorXd& q,
                          Eigen::VectorXd& param)
 {
+  // Configuration
   q.resize(7+3);
-  param.resize(3);
-
   double& shoulder_rotx=q(7);
   double& hip_rotz=q(8);
   double& hip_rotx=q(9);
+  
+  // Parameters
+  param.resize(3);
   double& shoulder_distance=param(0);
   double& chest_hip_distance=param(1);
   double& hip_distance=param(2);
 
+  // Joint limits
+  double shoulder_rotx_min=qtrunk_bounds[0].min_; // shoulder rot x lower bound
+  double shoulder_rotx_max=qtrunk_bounds[0].max_; // shoulder rot x upper bound
+  double hip_rotz_min=qtrunk_bounds[1].min_; // hip rot z lower bound
+  double hip_rotz_max=qtrunk_bounds[1].max_; // hip rot z upper bound
+  double hip_rotx_min=qtrunk_bounds[2].min_; // hip rot x lower bound
+  double hip_rotx_max=qtrunk_bounds[2].max_; // hip rot x upper bound
 
+  // Compute the versors of the shoulders and the hips
+  Eigen::Vector3d shoulder_versor_in_ext=(measures_in_ext.left_shoulder-measures_in_ext.right_shoulder).normalized();
+  Eigen::Vector3d hip_versor_in_ext=(measures_in_ext.left_hip-measures_in_ext.right_hip).normalized();
+
+  // Compute the chest reference frame Z
   Eigen::Vector3d upper_chest=0.5*(measures_in_ext.left_shoulder+measures_in_ext.right_shoulder);
   Eigen::Vector3d lower_chest=0.5*(measures_in_ext.left_hip+measures_in_ext.right_hip);
-  Eigen::Vector3d hip_versor_in_ext=(measures_in_ext.left_hip-measures_in_ext.right_hip).normalized();
   Eigen::Vector3d chest_z_in_ext=(upper_chest-lower_chest).normalized();
-  Eigen::Vector3d shoulder_versor_in_ext=(measures_in_ext.left_shoulder-measures_in_ext.right_shoulder).normalized();
 
-
+  // Compute the distances between the shoulders and the hips
   shoulder_distance=(measures_in_ext.left_shoulder-measures_in_ext.right_shoulder).norm();
   chest_hip_distance=(upper_chest-lower_chest).norm();
   hip_distance=(measures_in_ext.left_hip-measures_in_ext.right_hip).norm();
 
-  Eigen::Matrix3d chest_rot;
-
+  // CHEST REFERENCE FRAME:
   Eigen::Vector3d chest_y_in_ext=shoulder_versor_in_ext-shoulder_versor_in_ext.dot(chest_z_in_ext)*chest_z_in_ext;
   chest_y_in_ext.normalize();
-
   Eigen::Vector3d chest_x_in_ext=chest_y_in_ext.cross(chest_z_in_ext);
 
-  chest_rot.col(0)=chest_x_in_ext; // frontal direction
-  chest_rot.col(1)=chest_y_in_ext; // right to left shoulder
-  chest_rot.col(2)=chest_z_in_ext; // vertical axis (lower chest to upper chest)
+  // Set the columns of chest_rot
+  Eigen::Matrix3d chest_rot;
+  chest_rot.col(0) = chest_x_in_ext; // frontal direction
+  chest_rot.col(1) = chest_y_in_ext; // right to left shoulder
+  chest_rot.col(2) = chest_z_in_ext; // vertical axis (lower chest to upper chest)
 
+  // Convert to quaternion
   Eigen::Quaterniond chest_q(chest_rot);
 
   // If the scalar part of the quaternion is negative,
@@ -219,18 +454,50 @@ void Human28DOF::trunkIk(const keypoints& measures_in_ext,
   Eigen::Vector3d shoulder_versor_in_chest=T_ext_chest.linear().inverse()*shoulder_versor_in_ext;
 
   shoulder_rotx=std::atan2(shoulder_versor_in_chest(2),shoulder_versor_in_chest(1));
+  if (shoulder_rotx<shoulder_rotx_min || shoulder_rotx>shoulder_rotx_max)
+    throw std::runtime_error("Shoulder rotation out of bounds.");
 
-
+  // ### HIP ROT Z and HIP ROT X ###
   Eigen::Vector3d hip_versor_in_chest=T_ext_chest.linear().inverse()*hip_versor_in_ext;
-  hip_rotz=std::atan2(-hip_versor_in_chest(0),hip_versor_in_chest(1));
-
-  double cosq2;
-  if (std::abs(std::sin(hip_rotz))>0.5)
-    cosq2=-hip_versor_in_chest(0)/std::sin(hip_rotz);
+  
+  // Solution 1: Hypothesis -PI/2<hip_rotx<PI/2 (cos(hip_rotx)>0)
+  double hip_rotz_a=std::atan2(-hip_versor_in_chest(0),hip_versor_in_chest(1));
+  double hip_rotx_a;
+  if (std::abs(std::sin(hip_rotz_a))>0.5)
+    hip_rotx_a=std::atan2(hip_versor_in_chest(2),-hip_versor_in_chest(0)/std::sin(hip_rotz_a));
   else
-    cosq2=hip_versor_in_chest(1)/std::cos(hip_rotz);
+    hip_rotx_a=std::atan2(hip_versor_in_chest(2),hip_versor_in_chest(1)/std::cos(hip_rotz_a));
 
-  hip_rotx=std::atan2(hip_versor_in_chest(2),cosq2);
+  // check if the solution is valid (cos(hip_rotx)>0)
+  bool sol_a_valid=(std::cos(hip_rotx_a)>0
+    && hip_rotz_a>hip_rotz_min && hip_rotz_a<hip_rotz_max
+    && hip_rotx_a>hip_rotx_min && hip_rotx_a<hip_rotx_max);
+  hip_rotz = sol_a_valid ? hip_rotz_a : std::nan("");
+  hip_rotx = sol_a_valid ? hip_rotx_a : std::nan("");
+
+  if (!sol_a_valid)
+  {
+    // Solution 2: Hypothesis -PI<hip_rotx<-PI/2 or PI/2<hip_rotx<PI (cos(hip_rotx)<0)
+    double hip_rotz_b=std::atan2(hip_versor_in_chest(0),-hip_versor_in_chest(1));
+    double hip_rotx_b;
+    if (std::abs(std::sin(hip_rotz_b))>0.5)
+      hip_rotx_b=std::atan2(hip_versor_in_chest(2),-hip_versor_in_chest(0)/std::sin(hip_rotz_b));
+    else
+      hip_rotx_b=std::atan2(hip_versor_in_chest(2),hip_versor_in_chest(1)/std::cos(hip_rotz_b));
+    
+    // check if the solution is valid (cos(hip_rotx)<0)
+    bool sol_b_valid=(std::cos(hip_rotx_b)<0
+      && hip_rotz_b>hip_rotz_min && hip_rotz_b<hip_rotz_max
+      && hip_rotx_b>hip_rotx_min && hip_rotx_b<hip_rotx_max);
+    hip_rotz = sol_b_valid ? hip_rotz_b : std::nan("");
+    hip_rotx = sol_b_valid ? hip_rotx_b : std::nan("");
+
+    // Throw exception if there is no solution with the
+    // HIP ROT Z and HIP ROT X within the limits
+    if (!sol_b_valid)
+      throw std::runtime_error("No solution for the HIP ROT Z and HIP ROT X within the limits.");
+  }
+  // ### END HIP ROT Z and HIP ROT X ###
 }
 
 
@@ -370,25 +637,59 @@ void Human28DOF::headFk(const Eigen::VectorXd& q,
 
 void Human28DOF::headIk(const keypoints& measures_in_ext,
                         const Eigen::Affine3d& T_ext_chest,
+                        const std::vector<JointLimits>& qhead_bounds,
                         Eigen::VectorXd& q,
                         Eigen::VectorXd& param)
 {
-  param.resize(1);
+  // Configuration
   q.resize(2);
   double& q1=q(0);
   double& q2=q(1);
 
+  // Parameters
+  param.resize(1);
   Eigen::Vector3d head_in_chest=T_ext_chest.inverse() * measures_in_ext.head;
   param(0)=head_in_chest.norm();
 
-  q1=std::atan2(-head_in_chest(1),head_in_chest(2));
-  double dcosq2;
-  if (std::abs(std::sin(q1))>0.5)
-    dcosq2=-head_in_chest(1)/std::sin(q1);
-  else
-    dcosq2=head_in_chest(2)/std::cos(q1);
+  // Joint limits
+  double q1min=qhead_bounds[0].min_; // head rot x lower bound
+  double q1max=qhead_bounds[0].max_; // head rot x upper bound
+  double q2min=qhead_bounds[1].min_; // head rot y lower bound
+  double q2max=qhead_bounds[1].max_; // head rot y upper bound
 
-  q2=std::atan2(head_in_chest(0),dcosq2);
+  // Solution 1: Hypothesis -PI/2<q1<PI/2 (cos(q2)>0)
+  double q1a=std::atan2(-head_in_chest(1),head_in_chest(2));
+  double q2a;
+  if (std::abs(std::sin(q1a))>0.5)
+    q2a=std::atan2(head_in_chest(0),-head_in_chest(1)/std::sin(q1a));
+  else
+    q2a=std::atan2(head_in_chest(0),head_in_chest(2)/std::cos(q1a));
+
+  // check if the solution is valid (cos(q2)>0)
+  bool sol_a_valid=(std::cos(q2a)>0 && q1a>q1min && q1a<q1max && q2a>q2min && q2a<q2max);
+  q1 = sol_a_valid ? q1a : std::nan("");
+  q2 = sol_a_valid ? q2a : std::nan("");
+
+  if (!sol_a_valid)
+  {
+    // Solution 2: Hypothesis -PI<q1<-PI/2 or PI/2<q1<PI (cos(q2)<0)
+    double q1b=std::atan2(head_in_chest(1),-head_in_chest(2));
+    double q2b;
+    if (std::abs(std::sin(q1b))>0.5)
+      q2b=std::atan2(head_in_chest(0),-head_in_chest(1)/std::sin(q1b));
+    else
+      q2b=std::atan2(head_in_chest(0),head_in_chest(2)/std::cos(q1b));
+
+    // check if the solution is valid (cos(q2)<0)
+    bool sol_b_valid=(std::cos(q2b)<0 && q1b>q1min && q1b<q1max && q2b>q2min && q2b<q2max);
+    q1 = sol_b_valid ? q1b : std::nan("");
+    q2 = sol_b_valid ? q2b : std::nan("");
+
+    // Throw exception if there is no solution with the
+    // HEAD ROT X and HEAD ROT Y within the limits
+    if (!sol_b_valid)
+      throw std::runtime_error("No solution for the HEAD ROT X and HEAD ROT Y within the limits.");
+  }
 }
 
 
@@ -403,16 +704,24 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   // 1 dof: hip rotation is the rotation around chest_x_in_ext (frontal direction)
   // 3 dof translation= shoulder_distance, chest_hip_distance, hip_distance
   // 6 dof for each limb: 3 dof shoulder, 1 dof length of the upper arm, 1 dof elbow rotation, 1 dof lenght of the lower arm
+  
+  // ### TRUNK ###
   Eigen::VectorXd q_trunk(7+3);
 
   Eigen::VectorXd trunk_param(3);
+
+  std::vector<JointLimits> q_trunk_bounds = {
+    qbounds[7],
+    qbounds[8],
+    qbounds[9]
+  };
 
   Eigen::Affine3d T_ext_rshoulder;
   Eigen::Affine3d T_ext_lshoulder;
   Eigen::Affine3d T_ext_rhip;
   Eigen::Affine3d T_ext_lhip;
   Eigen::Affine3d T_ext_chest;
-  trunkIk(measures_in_ext,q_trunk,trunk_param);
+  trunkIk(measures_in_ext,q_trunk_bounds,q_trunk,trunk_param);
   trunkFk(q_trunk,
           trunk_param,
           T_ext_rshoulder,
@@ -420,12 +729,21 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
           T_ext_rhip,
           T_ext_lhip,
           T_ext_chest);
+  // ### END TRUNK ###
 
+  // ### HEAD ###
   Eigen::VectorXd q_head(2);
   Eigen::VectorXd head_param(1);
-  headIk(measures_in_ext,T_ext_chest,q_head,head_param);
 
+  std::vector<JointLimits> q_head_bounds = {
+    qbounds[26],
+    qbounds[27]
+  };
 
+  headIk(measures_in_ext,T_ext_chest,q_head_bounds,q_head,head_param);
+  // ### END HEAD ###
+
+  // ### ARMS ###
   double upper_arm_length=0.5*(
         (measures_in_ext.right_elbow - measures_in_ext.right_shoulder).norm()+
         (measures_in_ext.left_elbow  - measures_in_ext.left_shoulder).norm());
@@ -434,7 +752,45 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
         (measures_in_ext.right_elbow - measures_in_ext.right_wrist).norm()+
         (measures_in_ext.left_elbow  - measures_in_ext.left_wrist).norm());
 
+  Eigen::VectorXd arm_param(2);
+  arm_param(0)=upper_arm_length;
+  arm_param(1)=lower_arm_length;
 
+  std::vector<JointLimits> q_right_arm_bounds = {
+    qbounds[10],
+    qbounds[11],
+    qbounds[12],
+    qbounds[13]
+  };
+  std::vector<JointLimits> q_left_arm_bounds = {
+    qbounds[14],
+    qbounds[15],
+    qbounds[16],
+    qbounds[17]
+  };
+
+  Eigen::Vector3d relbow_in_rshoulder=T_ext_rshoulder.inverse()*measures_in_ext.right_elbow;
+  Eigen::Vector3d rwrist_in_rshoulder=T_ext_rshoulder.inverse()*measures_in_ext.right_wrist;
+
+  Eigen::Vector3d lelbow_in_lshoulder=T_ext_lshoulder.inverse()*measures_in_ext.left_elbow;
+  Eigen::Vector3d lwrist_in_lshoulder=T_ext_lshoulder.inverse()*measures_in_ext.left_wrist;
+
+  Eigen::VectorXd q_right_arm(4);
+  Eigen::VectorXd q_left_arm(4);
+
+  rightLimbIk(relbow_in_rshoulder,
+              rwrist_in_rshoulder,
+              arm_param,
+              q_right_arm_bounds,
+              q_right_arm);
+  leftLimbIk(lelbow_in_lshoulder,
+             lwrist_in_lshoulder,
+             arm_param,
+             q_left_arm_bounds,
+             q_left_arm);
+  // ### END ARMS ###
+
+  // ### LEGS ###
   double upper_leg_length=0.5*(
         (measures_in_ext.right_knee - measures_in_ext.right_hip).norm()+
         (measures_in_ext.left_knee  - measures_in_ext.left_hip).norm());
@@ -443,49 +799,22 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
         (measures_in_ext.right_knee - measures_in_ext.right_ankle).norm()+
         (measures_in_ext.left_knee  - measures_in_ext.left_ankle).norm());
 
-  Eigen::VectorXd arm_param(2);
-  arm_param(0)=upper_arm_length;
-  arm_param(1)=lower_arm_length;
-
-  std::vector<JointLimits> q_arm_bounds = {
-    qbounds[10],
-    qbounds[11],
-    qbounds[12],
-    qbounds[13]
-  };
-
   Eigen::VectorXd leg_param(2);
   leg_param(0)=upper_leg_length;
   leg_param(1)=lower_leg_length;
 
-  std::vector<JointLimits> q_leg_bounds = {
+  std::vector<JointLimits> q_right_leg_bounds = {
     qbounds[18],
     qbounds[19],
     qbounds[20],
     qbounds[21]
   };
-
-
-  Eigen::Vector3d relbow_in_rshoulder=T_ext_rshoulder.inverse()*measures_in_ext.right_elbow;
-  Eigen::Vector3d rwrist_in_rshoulder=T_ext_rshoulder.inverse()*measures_in_ext.right_wrist;
-
-  Eigen::Vector3d lelbow_in_lshoulder=T_ext_lshoulder.inverse()*measures_in_ext.left_elbow;
-  Eigen::Vector3d lwrist_in_lshoulder=T_ext_lshoulder.inverse()*measures_in_ext.left_wrist;
-
-
-  Eigen::VectorXd q_right_arm(4);
-  Eigen::VectorXd q_left_arm(4);
-
-  rightLimbIk(relbow_in_rshoulder,
-              rwrist_in_rshoulder,
-              arm_param,
-              q_arm_bounds,
-              q_right_arm);
-  leftLimbIk(lelbow_in_lshoulder,
-             lwrist_in_lshoulder,
-             arm_param,
-             q_arm_bounds,
-             q_left_arm);
+  std::vector<JointLimits> q_left_leg_bounds = {
+    qbounds[22],
+    qbounds[23],
+    qbounds[24],
+    qbounds[25]
+  };
 
   Eigen::Vector3d relbow_in_rhip=T_ext_rhip.inverse()*measures_in_ext.right_knee;
   Eigen::Vector3d rwrist_in_rhip=T_ext_rhip.inverse()*measures_in_ext.right_ankle;
@@ -499,14 +828,14 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   rightLimbIk(relbow_in_rhip,
               rwrist_in_rhip,
               leg_param,
-              q_leg_bounds,
+              q_right_leg_bounds,
               q_right_leg);
   leftLimbIk(lelbow_in_lhip,
              lwrist_in_lhip,
              leg_param,
-             q_leg_bounds,
+             q_left_leg_bounds,
              q_left_leg);
-
+  // ### END LEGS ###
 
   configuration.resize(7+3+4*4+2);
   configuration.block(0,0,10,1)= q_trunk;
@@ -622,12 +951,16 @@ void Human28DOF::fk_tfs(const Eigen::VectorXd& configuration,
                         Eigen::Affine3d& T_ext_lhip,
                         Eigen::Affine3d& T_ext_chest,
                         Eigen::Affine3d& T_ext_head,
+                        Eigen::Affine3d& T_ext_rshoulderRotated,
                         Eigen::Affine3d& T_ext_relbow,
                         Eigen::Affine3d& T_ext_rwrist,
+                        Eigen::Affine3d& T_ext_lshoulderRotated,
                         Eigen::Affine3d& T_ext_lelbow,
                         Eigen::Affine3d& T_ext_lwrist,
+                        Eigen::Affine3d& T_ext_rhipRotated,
                         Eigen::Affine3d& T_ext_rknee,
                         Eigen::Affine3d& T_ext_rankle,
+                        Eigen::Affine3d& T_ext_lhipRotated,
                         Eigen::Affine3d& T_ext_lknee,
                         Eigen::Affine3d& T_ext_lankle)
 {
@@ -652,45 +985,57 @@ void Human28DOF::fk_tfs(const Eigen::VectorXd& configuration,
           T_ext_chest);
   headFk(q_head,head_param,T_ext_chest,T_ext_head);
 
-  Eigen::Vector3d relbow_in_rshoulder;
-  Eigen::Vector3d rwrist_in_rshoulder;
+  Eigen::Affine3d T_rshoulder_rshoulderRotated;
+  Eigen::Affine3d T_rshoulder_relbow;
+  Eigen::Affine3d T_rshoulder_rwrist;
 
-  Eigen::Vector3d lelbow_in_lshoulder;
-  Eigen::Vector3d lwrist_in_lshoulder;
+  Eigen::Affine3d T_lshoulder_lshoulderRotated;
+  Eigen::Affine3d T_lshoulder_lelbow;
+  Eigen::Affine3d T_lshoulder_lwrist;
 
-  rightLimbFk(q_right_arm,
-              arm_param,
-              relbow_in_rshoulder,
-              rwrist_in_rshoulder);
-  leftLimbFk(q_left_arm,
-             arm_param,
-             lelbow_in_lshoulder,
-             lwrist_in_lshoulder);
+  rightLimbFk_tfs(q_right_arm,
+                  arm_param,
+                  T_rshoulder_rshoulderRotated,
+                  T_rshoulder_relbow,
+                  T_rshoulder_rwrist);
+  leftLimbFk_tfs(q_left_arm,
+                 arm_param,
+                 T_lshoulder_lshoulderRotated,
+                 T_lshoulder_lelbow,
+                 T_lshoulder_lwrist);
 
-  T_ext_relbow = T_ext_rshoulder*Eigen::Translation3d(relbow_in_rshoulder);
-  T_ext_rwrist = T_ext_rshoulder*Eigen::Translation3d(rwrist_in_rshoulder);
-  T_ext_lelbow = T_ext_lshoulder*Eigen::Translation3d(lelbow_in_lshoulder);
-  T_ext_lwrist = T_ext_lshoulder*Eigen::Translation3d(lwrist_in_lshoulder);
+  T_ext_rshoulderRotated = T_ext_rshoulder*T_rshoulder_rshoulderRotated;
+  T_ext_relbow = T_ext_rshoulder*T_rshoulder_relbow;
+  T_ext_rwrist = T_ext_rshoulder*T_rshoulder_rwrist;
+  T_ext_lshoulderRotated = T_ext_lshoulder*T_lshoulder_lshoulderRotated;
+  T_ext_lelbow = T_ext_lshoulder*T_lshoulder_lelbow;
+  T_ext_lwrist = T_ext_lshoulder*T_lshoulder_lwrist;
 
-  Eigen::Vector3d relbow_in_rhip;
-  Eigen::Vector3d rwrist_in_rhip;
+  Eigen::Affine3d T_rhip_rhipRotated;
+  Eigen::Affine3d T_rhip_rknee;
+  Eigen::Affine3d T_rhip_rankle;
 
-  Eigen::Vector3d lelbow_in_lhip;
-  Eigen::Vector3d lwrist_in_lhip;
+  Eigen::Affine3d T_lhip_lhipRotated;
+  Eigen::Affine3d T_lhip_lknee;
+  Eigen::Affine3d T_lhip_lankle;
 
-  rightLimbFk(q_right_leg,
-              leg_param,
-              relbow_in_rhip,
-              rwrist_in_rhip);
-  leftLimbFk(q_left_leg,
-             leg_param,
-             lelbow_in_lhip,
-             lwrist_in_lhip);
+  rightLimbFk_tfs(q_right_leg,
+                  leg_param,
+                  T_rhip_rhipRotated,
+                  T_rhip_rknee,
+                  T_rhip_rankle);
+  leftLimbFk_tfs(q_left_leg,
+                 leg_param,
+                 T_lhip_lhipRotated,
+                 T_lhip_lknee,
+                 T_lhip_lankle);
 
-  T_ext_rknee = T_ext_rhip*Eigen::Translation3d(relbow_in_rhip);
-  T_ext_rankle = T_ext_rhip*Eigen::Translation3d(rwrist_in_rhip);
-  T_ext_lknee = T_ext_lhip*Eigen::Translation3d(lelbow_in_lhip);
-  T_ext_lankle = T_ext_lhip*Eigen::Translation3d(lwrist_in_lhip);
+  T_ext_rhipRotated = T_ext_rhip*T_rhip_rhipRotated;
+  T_ext_rknee  = T_ext_rhip*T_rhip_rknee;
+  T_ext_rankle = T_ext_rhip*T_rhip_rankle;
+  T_ext_lhipRotated = T_ext_lhip*T_lhip_lhipRotated;
+  T_ext_lknee  = T_ext_lhip*T_lhip_lknee;
+  T_ext_lankle = T_ext_lhip*T_lhip_lankle;
 }
 
 

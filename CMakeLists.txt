@@ -15,9 +15,11 @@ set(CMAKE_BUILD_TYPE Release)
 #############################
 ## OPTIONS                 ##
 #############################
-option(ENABLE_TESTING           "ENABLE TESTING" OFF)
+option(ENABLE_TESTING           "ENABLE TESTING" ON)
 option(ENABLE_COVERAGE_TESTING  "ENABLE COVERAGE TESTING" OFF)
+option(USE_ROS1                 "USE ROS1 FOR TESTING" OFF)
 option(BUILD_EXAMPLE            "COMPILE THE EXAMPLE" OFF)
+
 #############################
 ## END - OPTIONS           ##
 #############################
@@ -28,7 +30,7 @@ option(BUILD_EXAMPLE            "COMPILE THE EXAMPLE" OFF)
 #############################
 find_package(rdyn_core REQUIRED)
 
-#cnr_enable_testing(ENABLE_TESTING ENABLE_COVERAGE)
+cnr_enable_testing(ENABLE_TESTING ENABLE_COVERAGE_TESTING USE_ROS1)
 
 find_package(Python REQUIRED COMPONENTS 
              Interpreter  # for the installation of the python package
@@ -68,13 +70,20 @@ target_link_libraries(human_model
 # Create an alias
 add_library(human_model::human_model ALIAS human_model)
 
-
-#add_executable(test test/test_fk_ik.cpp)
-#target_link_libraries(test
-#  PUBLIC
-#  human_model::human_model)
-#target_compile_definitions(test PUBLIC PROJECT_SRC_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
-#cnr_target_compile_options(test)
+# Add tests
+if(ENABLE_TESTING)
+  add_executable(human_model_test test/test_fk_ik.cpp)
+  target_link_libraries(human_model_test
+    PUBLIC
+    human_model::human_model
+    ${GTEST_LIBRARIES}
+  )
+  target_compile_definitions(human_model_test
+    PUBLIC
+    PROJECT_SRC_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+  cnr_target_compile_options(human_model_test)
+endif()
 
 # Python bindings
 pybind11_add_module(human_model_binding src/human_model/bindings.cpp)
@@ -114,7 +123,16 @@ install(
   DESTINATION include
 )
 
-# Install the library
+# Install the test
+if(ENABLE_TESTING)
+  install(
+    TARGETS human_model_test
+    EXPORT human_modelTargets
+    RUNTIME DESTINATION bin/human_model
+  )
+endif()
+
+# Install the library and the bindings
 install(
   TARGETS
     human_model
@@ -122,7 +140,6 @@ install(
   EXPORT human_modelTargets
   ARCHIVE DESTINATION lib/human_model
   LIBRARY DESTINATION lib/human_model
-  RUNTIME DESTINATION bin/human_model
 )
 
 # Install the export so that other CMake projects can find the library

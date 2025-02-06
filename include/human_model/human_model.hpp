@@ -86,7 +86,6 @@ class Human28DOF
 //   Eigen::VectorXd configurations_;
 //   Eigen::VectorXd velocities_;
 
-
 public:
   Human28DOF(){};
 
@@ -118,27 +117,32 @@ public:
                      Eigen::Affine3d& T_ext_lhip,
                      Eigen::Affine3d& T_ext_chest,
                      Eigen::Affine3d& T_ext_head,
+                     Eigen::Affine3d& T_ext_rshoulderRotated,
                      Eigen::Affine3d& T_ext_relbow,
                      Eigen::Affine3d& T_ext_rwrist,
+                     Eigen::Affine3d& T_ext_lshoulderRotated,
                      Eigen::Affine3d& T_ext_lelbow,
                      Eigen::Affine3d& T_ext_lwrist,
+                     Eigen::Affine3d& T_ext_rhipRotated,
                      Eigen::Affine3d& T_ext_rknee,
                      Eigen::Affine3d& T_ext_rankle,
+                     Eigen::Affine3d& T_ext_lhipRotated,
                      Eigen::Affine3d& T_ext_lknee,
                      Eigen::Affine3d& T_ext_lankle);
 
 
   static void trunkIk(const keypoints& measures_in_ext,
-                       Eigen::VectorXd& q,
-                       Eigen::VectorXd& param);
+                      const std::vector<JointLimits>& qtrunk_bounds,
+                      Eigen::VectorXd& q,
+                      Eigen::VectorXd& param);
 
   static void trunkFk(const Eigen::VectorXd& q,
-                       const Eigen::VectorXd& param,
-                       Eigen::Affine3d &T_ext_rshoulder,
-                       Eigen::Affine3d &T_ext_lshoulder,
-                       Eigen::Affine3d &T_ext_rhip,
-                       Eigen::Affine3d &T_ext_lhip,
-                       Eigen::Affine3d &T_ext_chest);
+                      const Eigen::VectorXd& param,
+                      Eigen::Affine3d &T_ext_rshoulder,
+                      Eigen::Affine3d &T_ext_lshoulder,
+                      Eigen::Affine3d &T_ext_rhip,
+                      Eigen::Affine3d &T_ext_lhip,
+                      Eigen::Affine3d &T_ext_chest);
 
 
   static void headFk(const Eigen::VectorXd& q,
@@ -148,6 +152,7 @@ public:
 
   static void headIk(const keypoints& measures_in_ext,
                      const Eigen::Affine3d& T_ext_chest,
+                     const std::vector<JointLimits>& qhead_bounds,
                      Eigen::VectorXd& q,
                      Eigen::VectorXd& param);
 
@@ -157,10 +162,22 @@ public:
                           Eigen::Vector3d& elbow_in_limb,
                           Eigen::Vector3d& wrist_in_limb);
 
+  static void rightLimbFk_tfs(const Eigen::VectorXd& qarm,
+                              const Eigen::VectorXd& param,
+                              Eigen::Affine3d& T_limb_shoulderRotated,
+                              Eigen::Affine3d& T_limb_elbow,
+                              Eigen::Affine3d& T_limb_wrist);
+
   static void leftLimbFk(const Eigen::VectorXd& qarm,
                          const Eigen::VectorXd& param,
                          Eigen::Vector3d& elbow_in_limb,
                          Eigen::Vector3d& wrist_in_limb);
+
+  static void leftLimbFk_tfs(const Eigen::VectorXd& qarm,
+                             const Eigen::VectorXd& param,
+                             Eigen::Affine3d& T_limb_shoulderRotated,
+                             Eigen::Affine3d& T_limb_elbow,
+                             Eigen::Affine3d& T_limb_wrist);
 
   static void rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
                           const Eigen::Vector3d& wrist_in_limb,
@@ -179,6 +196,20 @@ public:
                     const Eigen::VectorXd& param);
   // friend std::ostream& operator<<(std::ostream& os, const keypoints& keypoints); // is this function ever used?
 
+private:
+  static void computeWristIn2(const Eigen::Vector2d& qshoulder,
+                              const Eigen::Vector3d& wrist_in_limb,
+                              Eigen::Vector3d& wrist_in_2);
+
+  static bool shoulderIk(const Eigen::Vector3d& elbow_in_limb,
+                         const std::vector<JointLimits>& qshoulder_bounds,
+                         bool first_solution,
+                         Eigen::Vector2d& qshoulder);
+
+  static bool elbowIk(const Eigen::Vector3d& wrist_in_limb,
+                      const std::vector<JointLimits>& qelbow_bounds,
+                      bool first_solution,
+                      Eigen::Vector2d& qelbow);
 };
 
 std::ostream& operator<<(std::ostream& os, const keypoints& keypoints);
