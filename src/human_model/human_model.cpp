@@ -199,10 +199,10 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
   bool valid_sol_a=shoulderIk(elbow_in_limb,q_shoulder_bounds,true,q_a);  // first solution
   bool valid_sol_b=shoulderIk(elbow_in_limb,q_shoulder_bounds,false,q_b); // second solution
 
-  // Throw exception if there is no solution with the
-  // SHOULDER ROT Z and SHOULDER ROT X within the limits
-  if (!valid_sol_a && !valid_sol_b)
-    throw std::runtime_error("No solution for the SHOULDER ROT Z and SHOULDER ROT X within the limits.");
+  // // Throw exception if there is no solution with the
+  // // SHOULDER ROT Z and SHOULDER ROT X within the limits
+  // if (!valid_sol_a && !valid_sol_b)
+  //   throw std::runtime_error("No solution for the SHOULDER ROT Z and SHOULDER ROT X within the limits.");
   // ### END ELBOW IN LIMB FRAME ###
 
   // ### WRIST IN FRAME #2 ###
@@ -218,10 +218,10 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
   bool valid_sol_ba=elbowIk(wrist_in_2_b,q4,q_elbow_bounds,true,q_elbow_ba);  // first solution for q_b
   bool valid_sol_bb=elbowIk(wrist_in_2_b,q4,q_elbow_bounds,false,q_elbow_bb); // second solution for q_b
   
-  // Throw exception if there is no solution with the
-  // SHOULDER ROT Y and ELBOW ROT Z within the limits
-  if (!valid_sol_aa && !valid_sol_ab && !valid_sol_ba && !valid_sol_bb)
-    throw std::runtime_error("No solution for the SHOULDER ROT Y and ELBOW ROT Z within the limits.");
+  // // Throw exception if there is no solution with the
+  // // SHOULDER ROT Y and ELBOW ROT Z within the limits
+  // if (!valid_sol_aa && !valid_sol_ab && !valid_sol_ba && !valid_sol_bb)
+  //   throw std::runtime_error("No solution for the SHOULDER ROT Y and ELBOW ROT Z within the limits.");
   // ### END WRIST IN FRAME #2 ###
 
   // Select q1, q2, q3, q5 based on the valid solutions and the previous configuration
@@ -296,7 +296,7 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
   if (!valid_sol_aa && !valid_sol_ab && !valid_sol_ba && !valid_sol_bb)
   {
     q1, q2, q3, q5 = std::nan("");
-    throw std::runtime_error("No solution for the SHOULDER ROT Z, SHOULDER ROT X, SHOULDER ROT Y, and ELBOW ROT Z within the limits.");
+    // throw std::runtime_error("No solution for the SHOULDER ROT Z, SHOULDER ROT X, SHOULDER ROT Y, and ELBOW ROT Z within the limits.");
   }
 }
 
@@ -540,10 +540,10 @@ void Human28DOF::trunkIk(const keypoints& measures_in_ext,
     hip_rotz = sol_b_valid ? hip_rotz_b : std::nan("");
     hip_rotx = sol_b_valid ? hip_rotx_b : std::nan("");
 
-    // Throw exception if there is no solution with the
-    // HIP ROT Z and HIP ROT X within the limits
-    if (!sol_b_valid)
-      throw std::runtime_error("No solution for the HIP ROT Z and HIP ROT X within the limits.");
+    // // Throw exception if there is no solution with the
+    // // HIP ROT Z and HIP ROT X within the limits
+    // if (!sol_b_valid)
+    //   throw std::runtime_error("No solution for the HIP ROT Z and HIP ROT X within the limits.");
   }
   // ### END HIP ROT Z and HIP ROT X ###
 }
@@ -733,10 +733,10 @@ void Human28DOF::headIk(const keypoints& measures_in_ext,
     q1 = sol_b_valid ? q1b : std::nan("");
     q2 = sol_b_valid ? q2b : std::nan("");
 
-    // Throw exception if there is no solution with the
-    // HEAD ROT X and HEAD ROT Y within the limits
-    if (!sol_b_valid)
-      throw std::runtime_error("No solution for the HEAD ROT X and HEAD ROT Y within the limits.");
+    // // Throw exception if there is no solution with the
+    // // HEAD ROT X and HEAD ROT Y within the limits
+    // if (!sol_b_valid)
+    //   throw std::runtime_error("No solution for the HEAD ROT X and HEAD ROT Y within the limits.");
   }
 }
 
