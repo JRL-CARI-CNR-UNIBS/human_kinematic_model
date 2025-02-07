@@ -31,6 +31,23 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace human_model
 {
 
+bool Human28DOF::updateIfCloser(const Eigen::VectorXd& qarm_temp,
+                                const Eigen::VectorXd& qarm_previous,
+                                Eigen::VectorXd& qarm,
+                                double& q_distance)
+{
+  bool is_closer(false);
+  double q_distance_temp = (qarm_temp - qarm_previous).norm();
+  if (q_distance_temp < q_distance)
+  {
+    qarm = qarm_temp;
+    q_distance = q_distance_temp;
+    is_closer = true;
+  }
+  return is_closer;
+}
+
+
 void Human28DOF::computeWristIn2(const Eigen::Vector2d& qshoulder,
                                  const Eigen::Vector3d& wrist_in_limb,
                                  Eigen::Vector3d& wrist_in_2)
@@ -43,7 +60,7 @@ void Human28DOF::computeWristIn2(const Eigen::Vector2d& qshoulder,
 
   Eigen::Affine3d T02=T01*T12;
 
-  Eigen::Vector3d wrist_in_2=T02.inverse()*wrist_in_limb;
+  wrist_in_2=T02.inverse()*wrist_in_limb;
 }
 
 
@@ -57,10 +74,10 @@ bool Human28DOF::shoulderIk(const Eigen::Vector3d& elbow_in_limb,
   double& q2=qshoulder(1);  // shoulder rot x
 
   // Joint limits
-  double q1min=qshoulder_bounds[0].min_; // shoulder rot z lower bound
-  double q1max=qshoulder_bounds[0].max_; // shoulder rot z upper bound
-  double q2min=qshoulder_bounds[1].min_; // shoulder rot x lower bound
-  double q2max=qshoulder_bounds[1].max_; // shoulder rot x upper bound
+  const double& q1min=qshoulder_bounds[0].min_; // shoulder rot z lower bound
+  const double& q1max=qshoulder_bounds[0].max_; // shoulder rot z upper bound
+  const double& q2min=qshoulder_bounds[1].min_; // shoulder rot x lower bound
+  const double& q2max=qshoulder_bounds[1].max_; // shoulder rot x upper bound
 
   // q1: SHOULDER ROT Z
   if (first_solution)
@@ -87,7 +104,7 @@ bool Human28DOF::shoulderIk(const Eigen::Vector3d& elbow_in_limb,
     // (cos(q2)<0)
     valid_solution=valid_solution && (std::cos(q2)<0);
 
-  // Assing nan if the solution is not valid
+  // Assign nan if the solution is not valid
   q1 = valid_solution ? q1 : std::nan("");
   q2 = valid_solution ? q2 : std::nan("");
 
@@ -96,39 +113,56 @@ bool Human28DOF::shoulderIk(const Eigen::Vector3d& elbow_in_limb,
 
 
 bool Human28DOF::elbowIk(const Eigen::Vector3d& wrist_in_limb,
+                         const double& upper_arm_length,
                          const std::vector<JointLimits>& qelbow_bounds,
                          bool first_solution,
                          Eigen::Vector2d& qelbow)
 {
-  // Solution 1: Hypothesis  0<q5<PI (sin(q5)>0)
-  double q6cosq5 = wrist_in_2(1)-q4;
+  // Configuration
+  double& q3=qelbow(0);  // shoulder rot y
+  double& q5=qelbow(1);  // elbow rot z
 
-  double q3a=std::atan2(wrist_in_2(2),-wrist_in_2(0));
-  double q5a; 
-  if (std::abs(std::sin(q3a))>0.5)
-    q5a=std::atan2(wrist_in_2(2)/std::sin(q3a),q6cosq5);
+  // Parameters
+  const double& q4=upper_arm_length;  // upper arm length
+
+  // Joint limits
+  const double& q3min=qelbow_bounds[0].min_; // shoulder rot y lower bound
+  const double& q3max=qelbow_bounds[0].max_; // shoulder rot y upper bound
+  const double& q5min=qelbow_bounds[1].min_; // elbow rot z lower bound
+  const double& q5max=qelbow_bounds[1].max_; // elbow rot z upper bound
+
+  double q6cosq5 = wrist_in_limb(1)-q4;
+
+  // q3: SHOULDER ROT Y
+  if (first_solution)
+    // Solution 1: Hypothesis  0<q5<PI (sin(q5)>0)
+    q3=std::atan2(wrist_in_limb(2),-wrist_in_limb(0));
   else
-    q5a=std::atan2(-wrist_in_2(0)/std::cos(q3a),q6cosq5);
-
-  // check if the solution is valid (sin(q5)>0)
-  sol_a_valid=(std::sin(q5a)>0 && q3a>q3min && q3a<q3max && q5a>q5min && q5a<q5max);
-  q3 = sol_a_valid ? q3a : std::nan("");
-  q5 = sol_a_valid ? q5a : std::nan("");
-
-  if (!sol_a_valid)
-  {
     // Solution 2: Hypothesis -PI<q5<0 (sin(q5)<0)
-    double q3b=std::atan2(-wrist_in_2(2),wrist_in_2(0));
-    double q5b;
-    if (std::abs(std::sin(q3b))>0.5)
-      q5b=std::atan2(wrist_in_2(2)/std::sin(q3b),q6cosq5);
-    else
-      q5b=std::atan2(-wrist_in_2(0)/std::cos(q3b),q6cosq5);
+    q3=std::atan2(-wrist_in_limb(2),wrist_in_limb(0));
 
-    // check if the solution is valid (sin(q5)<0)
-    bool sol_b_valid=(std::sin(q5b)<0 && q3b>q3min && q3b<q3max && q5b>q5min && q5b<q5max);
-    q3 = sol_b_valid ? q3b : std::nan("");
-    q5 = sol_b_valid ? q5b : std::nan("");}
+  // q5: ELBOW ROT Z 
+  if (std::abs(std::sin(q3))>0.5)
+    q5=std::atan2(wrist_in_limb(2)/std::sin(q3),q6cosq5);
+  else
+    q5=std::atan2(-wrist_in_limb(0)/std::cos(q3),q6cosq5);
+
+  // check if the solution is within the joint limits
+  bool valid_solution=(q3>q3min && q3<q3max && q5>q5min && q5<q5max);
+
+  // check if the solution is valid
+  if (first_solution)
+    // (sin(q5)>0)
+    valid_solution=valid_solution && (std::sin(q5)>0);
+  else
+    // (sin(q5)<0)
+    valid_solution=valid_solution && (std::sin(q5)<0);
+
+  // Assign nan if the solution is not valid
+  q3 = valid_solution ? q3 : std::nan("");
+  q5 = valid_solution ? q5 : std::nan("");
+
+  return valid_solution;
 }
 
 
@@ -136,6 +170,7 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
                              const Eigen::Vector3d& wrist_in_limb,
                              const Eigen::VectorXd& param,
                              const std::vector<JointLimits>& qarm_bounds,
+                             const Eigen::VectorXd& qarm_previous,
                              Eigen::VectorXd& qarm)
 {
   // Configuration
@@ -178,10 +213,10 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
 
   // Compute the two solutions for the ELBOW for each of the two solutions for the SHOULDER
   Eigen::Vector2d q_elbow_aa, q_elbow_ab, q_elbow_ba, q_elbow_bb;
-  bool valid_sol_aa=elbowIk(wrist_in_2_a,q_elbow_bounds,true,q_elbow_aa);  // first solution for q_a
-  bool valid_sol_ab=elbowIk(wrist_in_2_a,q_elbow_bounds,false,q_elbow_ab); // second solution for q_a
-  bool valid_sol_ba=elbowIk(wrist_in_2_b,q_elbow_bounds,true,q_elbow_ba);  // first solution for q_b
-  bool valid_sol_bb=elbowIk(wrist_in_2_b,q_elbow_bounds,false,q_elbow_bb); // second solution for q_b
+  bool valid_sol_aa=elbowIk(wrist_in_2_a,q4,q_elbow_bounds,true,q_elbow_aa);  // first solution for q_a
+  bool valid_sol_ab=elbowIk(wrist_in_2_a,q4,q_elbow_bounds,false,q_elbow_ab); // second solution for q_a
+  bool valid_sol_ba=elbowIk(wrist_in_2_b,q4,q_elbow_bounds,true,q_elbow_ba);  // first solution for q_b
+  bool valid_sol_bb=elbowIk(wrist_in_2_b,q4,q_elbow_bounds,false,q_elbow_bb); // second solution for q_b
   
   // Throw exception if there is no solution with the
   // SHOULDER ROT Y and ELBOW ROT Z within the limits
@@ -189,64 +224,76 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
     throw std::runtime_error("No solution for the SHOULDER ROT Y and ELBOW ROT Z within the limits.");
   // ### END WRIST IN FRAME #2 ###
 
-  // Select q1, q2, q3, q5 based on the valid solutions
+  // Select q1, q2, q3, q5 based on the valid solutions and the previous configuration
+  double q_distance=std::numeric_limits<double>::infinity();
+  Eigen::VectorXd qarm_temp(4);
+  bool is_closer(false);
   if (valid_sol_aa && valid_sol_a)
   {
-    q1=q_a(0);
-    q2=q_a(1);
-    q3=q_elbow_aa(0);
-    q5=q_elbow_aa(1);
+    // std::cout << "\tvalid_sol_aa && valid_sol_a" << std::endl;
+    qarm_temp << q_a(0), q_a(1), q_elbow_aa(0), q_elbow_aa(1);
+    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
+    // if (is_closer)
+      // std::cout << "\t\tselected valid_sol_aa && valid_sol_a" << std::endl;
   }
-  else if (valid_sol_aa && valid_sol_b)
+  if (valid_sol_aa && valid_sol_b)
   {
-    q1=q_b(0);
-    q2=q_b(1);
-    q3=q_elbow_aa(0);
-    q5=q_elbow_aa(1);
+    // std::cout << "\tvalid_sol_aa && valid_sol_b" << std::endl;
+    qarm_temp << q_b(0), q_b(1), q_elbow_aa(0), q_elbow_aa(1);
+    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
+    // if (is_closer)
+      // std::cout << "\t\tselected valid_sol_aa && valid_sol_b" << std::endl;
   }
-  else if (valid_sol_ab && valid_sol_a)
+  if (valid_sol_ab && valid_sol_a)
   {
-    q1=q_a(0);
-    q2=q_a(1);
-    q3=q_elbow_ab(0);
-    q5=q_elbow_ab(1);
+    // std::cout << "\tvalid_sol_ab && valid_sol_a" << std::endl;
+    qarm_temp << q_a(0), q_a(1), q_elbow_ab(0), q_elbow_ab(1);
+    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
+    // if (is_closer)
+      // std::cout << "\t\tselected valid_sol_ab && valid_sol_a" << std::endl;
   }
-  else if (valid_sol_ab && valid_sol_b)
+  if (valid_sol_ab && valid_sol_b)
   {
-    q1=q_b(0);
-    q2=q_b(1);
-    q3=q_elbow_ab(0);
-    q5=q_elbow_ab(1);
+    // std::cout << "\tvalid_sol_ab && valid_sol_b" << std::endl;
+    qarm_temp << q_b(0), q_b(1), q_elbow_ab(0), q_elbow_ab(1);
+    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
+    // if (is_closer)
+      // std::cout << "\t\tselected valid_sol_ab && valid_sol_b" << std::endl;
   }
-  else if (valid_sol_ba && valid_sol_a)
+  if (valid_sol_ba && valid_sol_a)
   {
-    q1=q_a(0);
-    q2=q_a(1);
-    q3=q_elbow_ba(0);
-    q5=q_elbow_ba(1);
+    // std::cout << "\tvalid_sol_ba && valid_sol_a" << std::endl;
+    qarm_temp << q_a(0), q_a(1), q_elbow_ba(0), q_elbow_ba(1);
+    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
+    // if (is_closer)
+      // std::cout << "\t\tselected valid_sol_ba && valid_sol_a" << std::endl;
   }
-  else if (valid_sol_ba && valid_sol_b)
+  if (valid_sol_ba && valid_sol_b)
   {
-    q1=q_b(0);
-    q2=q_b(1);
-    q3=q_elbow_ba(0);
-    q5=q_elbow_ba(1);
+    // std::cout << "\tvalid_sol_ba && valid_sol_b" << std::endl;
+    qarm_temp << q_b(0), q_b(1), q_elbow_ba(0), q_elbow_ba(1);
+    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
+    // if (is_closer)
+      // std::cout << "\t\tselected valid_sol_ba && valid_sol_b" << std::endl;
   }
-  else if (valid_sol_bb && valid_sol_a)
+  if (valid_sol_bb && valid_sol_a)
   {
-    q1=q_a(0);
-    q2=q_a(1);
-    q3=q_elbow_bb(0);
-    q5=q_elbow_bb(1);
+    // std::cout << "\tvalid_sol_bb && valid_sol_a" << std::endl;
+    qarm_temp << q_a(0), q_a(1), q_elbow_bb(0), q_elbow_bb(1);
+    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
+    // if (is_closer)
+      // std::cout << "\t\tselected valid_sol_bb && valid_sol_a" << std::endl;
   }
-  else if (valid_sol_bb && valid_sol_b)
+  if (valid_sol_bb && valid_sol_b)
   {
-    q1=q_b(0);
-    q2=q_b(1);
-    q3=q_elbow_bb(0);
-    q5=q_elbow_bb(1);
+    // std::cout << "\tvalid_sol_bb && valid_sol_b" << std::endl;
+    qarm_temp << q_b(0), q_b(1), q_elbow_bb(0), q_elbow_bb(1);
+    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
+    // if (is_closer)
+      // std::cout << "\t\tselected valid_sol_bb && valid_sol_b" << std::endl;
   }
-  else
+  // Throw an exception if there is no valid solution
+  if (!valid_sol_aa && !valid_sol_ab && !valid_sol_ba && !valid_sol_bb)
   {
     q1, q2, q3, q5 = std::nan("");
     throw std::runtime_error("No solution for the SHOULDER ROT Z, SHOULDER ROT X, SHOULDER ROT Y, and ELBOW ROT Z within the limits.");
@@ -258,13 +305,14 @@ void Human28DOF::leftLimbIk(const Eigen::Vector3d& elbow_in_limb,
                             const Eigen::Vector3d& wrist_in_limb,
                             const Eigen::VectorXd& param,
                             const std::vector<JointLimits>& qarm_bounds,
+                            const Eigen::VectorXd& qarm_previous,
                             Eigen::VectorXd& qarm)
 {
   Eigen::Vector3d mirror_elbow_in_limb=elbow_in_limb;
   Eigen::Vector3d mirror_wrist_in_limb=wrist_in_limb;
   mirror_elbow_in_limb(2)*=-1.0;
   mirror_wrist_in_limb(2)*=-1.0;
-  rightLimbIk(mirror_elbow_in_limb,mirror_wrist_in_limb,param,qarm_bounds,qarm);
+  rightLimbIk(mirror_elbow_in_limb,mirror_wrist_in_limb,param,qarm_bounds,qarm_previous,qarm);
   return;
 }
 
@@ -695,6 +743,7 @@ void Human28DOF::headIk(const keypoints& measures_in_ext,
 
 void Human28DOF::ik(const keypoints& measures_in_ext,
                     const std::vector<JointLimits>& qbounds,
+                    const Eigen::VectorXd& configuration_previous,
                     Eigen::VectorXd& configuration,
                     Eigen::VectorXd& param)
 {
@@ -744,6 +793,12 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   // ### END HEAD ###
 
   // ### ARMS ###
+  Eigen::Vector3d relbow_in_rshoulder=T_ext_rshoulder.inverse()*measures_in_ext.right_elbow;
+  Eigen::Vector3d rwrist_in_rshoulder=T_ext_rshoulder.inverse()*measures_in_ext.right_wrist;
+
+  Eigen::Vector3d lelbow_in_lshoulder=T_ext_lshoulder.inverse()*measures_in_ext.left_elbow;
+  Eigen::Vector3d lwrist_in_lshoulder=T_ext_lshoulder.inverse()*measures_in_ext.left_wrist;
+  
   double upper_arm_length=0.5*(
         (measures_in_ext.right_elbow - measures_in_ext.right_shoulder).norm()+
         (measures_in_ext.left_elbow  - measures_in_ext.left_shoulder).norm());
@@ -769,28 +824,38 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
     qbounds[17]
   };
 
-  Eigen::Vector3d relbow_in_rshoulder=T_ext_rshoulder.inverse()*measures_in_ext.right_elbow;
-  Eigen::Vector3d rwrist_in_rshoulder=T_ext_rshoulder.inverse()*measures_in_ext.right_wrist;
-
-  Eigen::Vector3d lelbow_in_lshoulder=T_ext_lshoulder.inverse()*measures_in_ext.left_elbow;
-  Eigen::Vector3d lwrist_in_lshoulder=T_ext_lshoulder.inverse()*measures_in_ext.left_wrist;
+  Eigen::VectorXd q_right_arm_previous(4);
+  Eigen::VectorXd q_left_arm_previous(4);
+  q_right_arm_previous << configuration_previous.block(10,0,4,1);
+  q_left_arm_previous << configuration_previous.block(14,0,4,1);
 
   Eigen::VectorXd q_right_arm(4);
   Eigen::VectorXd q_left_arm(4);
 
+  // std::cout << "right arm IK" << std::endl;
   rightLimbIk(relbow_in_rshoulder,
               rwrist_in_rshoulder,
               arm_param,
               q_right_arm_bounds,
+              q_right_arm_previous,
               q_right_arm);
+
+  // std::cout << "left arm IK" << std::endl;
   leftLimbIk(lelbow_in_lshoulder,
              lwrist_in_lshoulder,
              arm_param,
              q_left_arm_bounds,
+              q_left_arm_previous,
              q_left_arm);
   // ### END ARMS ###
 
   // ### LEGS ###
+  Eigen::Vector3d relbow_in_rhip=T_ext_rhip.inverse()*measures_in_ext.right_knee;
+  Eigen::Vector3d rwrist_in_rhip=T_ext_rhip.inverse()*measures_in_ext.right_ankle;
+
+  Eigen::Vector3d lelbow_in_lhip=T_ext_lhip.inverse()*measures_in_ext.left_knee;
+  Eigen::Vector3d lwrist_in_lhip=T_ext_lhip.inverse()*measures_in_ext.left_ankle;
+  
   double upper_leg_length=0.5*(
         (measures_in_ext.right_knee - measures_in_ext.right_hip).norm()+
         (measures_in_ext.left_knee  - measures_in_ext.left_hip).norm());
@@ -816,24 +881,28 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
     qbounds[25]
   };
 
-  Eigen::Vector3d relbow_in_rhip=T_ext_rhip.inverse()*measures_in_ext.right_knee;
-  Eigen::Vector3d rwrist_in_rhip=T_ext_rhip.inverse()*measures_in_ext.right_ankle;
-
-  Eigen::Vector3d lelbow_in_lhip=T_ext_lhip.inverse()*measures_in_ext.left_knee;
-  Eigen::Vector3d lwrist_in_lhip=T_ext_lhip.inverse()*measures_in_ext.left_ankle;
+  Eigen::VectorXd q_right_leg_previous(4);
+  Eigen::VectorXd q_left_leg_previous(4);
+  q_right_leg_previous << configuration_previous.block(18,0,4,1);
+  q_left_leg_previous << configuration_previous.block(22,0,4,1);
 
   Eigen::VectorXd q_right_leg(4);
   Eigen::VectorXd q_left_leg(4);
 
+  // std::cout << "right leg IK" << std::endl;
   rightLimbIk(relbow_in_rhip,
               rwrist_in_rhip,
               leg_param,
               q_right_leg_bounds,
+              q_right_leg_previous,
               q_right_leg);
+
+  // std::cout << "left leg IK" << std::endl;
   leftLimbIk(lelbow_in_lhip,
              lwrist_in_lhip,
              leg_param,
              q_left_leg_bounds,
+              q_left_leg_previous,
              q_left_leg);
   // ### END LEGS ###
 
@@ -855,10 +924,11 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
 
 std::pair<Eigen::VectorXd, Eigen::VectorXd> Human28DOF::ik_binding(const keypoints& measures_in_ext,
                                                                    const std::vector<JointLimits>& joint_limits,
+                                                                   const Eigen::VectorXd& configuration_previous,
                                                                    Eigen::VectorXd& configuration,
                                                                    Eigen::VectorXd& param)
 {
-  Human28DOF::ik(measures_in_ext,joint_limits,configuration,param);
+  Human28DOF::ik(measures_in_ext,joint_limits,configuration_previous,configuration,param);
   return std::make_pair(configuration,param);
 }
 

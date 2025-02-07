@@ -96,12 +96,14 @@ public:
    */
   static void ik(const keypoints& measures_in_ext,
                  const std::vector<JointLimits>& joint_limits,
+                 const Eigen::VectorXd& configuration_previous,
                  Eigen::VectorXd& configuration,
                  Eigen::VectorXd& param);
 
   // Used to return values beyond modifying the input arguments
   static std::pair<Eigen::VectorXd, Eigen::VectorXd> ik_binding(const keypoints& measures_in_ext,
                                                                 const std::vector<JointLimits>& joint_limits,
+                                                                const Eigen::VectorXd& configuration_previous,
                                                                 Eigen::VectorXd& configuration,
                                                                 Eigen::VectorXd& param);
 
@@ -183,12 +185,14 @@ public:
                           const Eigen::Vector3d& wrist_in_limb,
                           const Eigen::VectorXd& param,
                           const std::vector<JointLimits>& qarm_bounds,
+                          const Eigen::VectorXd& qarm_previous,
                           Eigen::VectorXd& qarm);
 
   static void leftLimbIk(const Eigen::Vector3d& elbow_in_limb,
                          const Eigen::Vector3d& wrist_in_limb,
                          const Eigen::VectorXd& param,
                          const std::vector<JointLimits>& qarm_bounds,
+                         const Eigen::VectorXd& qarm_previous,
                          Eigen::VectorXd& qarm);
 
 
@@ -207,9 +211,15 @@ private:
                          Eigen::Vector2d& qshoulder);
 
   static bool elbowIk(const Eigen::Vector3d& wrist_in_limb,
+                      const double& upper_arm_length,
                       const std::vector<JointLimits>& qelbow_bounds,
                       bool first_solution,
                       Eigen::Vector2d& qelbow);
+
+  static bool updateIfCloser(const Eigen::VectorXd& qarm_temp,
+                             const Eigen::VectorXd& qarm_previous,
+                             Eigen::VectorXd& qarm,
+                             double& q_distance);
 };
 
 std::ostream& operator<<(std::ostream& os, const keypoints& keypoints);

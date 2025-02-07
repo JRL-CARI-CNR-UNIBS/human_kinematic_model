@@ -169,7 +169,7 @@ TEST_F(HumanKinematicModelTest, TestFkIk) {
 
     // Compute the forward kinematics and inverse kinematics
     human_model::Human28DOF::fk(q,param,kp_in_ext);
-    human_model::Human28DOF::ik(kp_in_ext,qbounds,q2,param2);
+    human_model::Human28DOF::ik(kp_in_ext,qbounds,q,q2,param2); // use q as previous configuration
 
     std::cout << "\nq2 [before fk]           : \n" << q2.transpose() << std::endl;
     std::cout << "\ndiff q [before fk]       : \n" << (q-q2).transpose() << std::endl;
@@ -216,6 +216,11 @@ TEST_F(HumanKinematicModelTest, TestFkIk) {
     EXPECT_LT(kpt_distance, 1e-8) << "keypoint distance is greater than threshold";
     EXPECT_LT(q_distance, 1e-8) << "configuration difference is greater than threshold";
     EXPECT_LT(param_distance, 1e-8) << "param difference is greater than threshold";
+
+    if (kpt_distance >= 1e-8)
+    {
+      break;
+    }
   }
 
   // End timing
