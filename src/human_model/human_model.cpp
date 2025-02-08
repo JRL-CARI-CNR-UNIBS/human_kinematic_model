@@ -31,6 +31,22 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace human_model
 {
 
+void Human28DOF::chestQuatRotated(const Eigen::Quaterniond& qchest,
+                                  Eigen::Vector4d& qchest_rot)
+{
+  // Apply a 180° offset to the z-axis rotation
+  Eigen::Quaterniond rotated_quaternion = qchest * Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitZ());
+
+  // If the scalar part of the quaternion is negative,
+  // multiply by -1 to ensure consistent representation
+  if (rotated_quaternion.w() < 0) {
+    rotated_quaternion.coeffs() *= -1.0;
+  }
+
+  qchest_rot = rotated_quaternion.coeffs();
+}
+
+
 bool Human28DOF::updateIfCloser(const Eigen::VectorXd& qarm_temp,
                                 const Eigen::VectorXd& qarm_previous,
                                 Eigen::VectorXd& qarm,
@@ -236,14 +252,6 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
     // if (is_closer)
       // std::cout << "\t\tselected valid_sol_aa && valid_sol_a" << std::endl;
   }
-  if (valid_sol_aa && valid_sol_b)
-  {
-    // std::cout << "\tvalid_sol_aa && valid_sol_b" << std::endl;
-    qarm_temp << q_b(0), q_b(1), q_elbow_aa(0), q_elbow_aa(1);
-    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
-    // if (is_closer)
-      // std::cout << "\t\tselected valid_sol_aa && valid_sol_b" << std::endl;
-  }
   if (valid_sol_ab && valid_sol_a)
   {
     // std::cout << "\tvalid_sol_ab && valid_sol_a" << std::endl;
@@ -252,22 +260,6 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
     // if (is_closer)
       // std::cout << "\t\tselected valid_sol_ab && valid_sol_a" << std::endl;
   }
-  if (valid_sol_ab && valid_sol_b)
-  {
-    // std::cout << "\tvalid_sol_ab && valid_sol_b" << std::endl;
-    qarm_temp << q_b(0), q_b(1), q_elbow_ab(0), q_elbow_ab(1);
-    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
-    // if (is_closer)
-      // std::cout << "\t\tselected valid_sol_ab && valid_sol_b" << std::endl;
-  }
-  if (valid_sol_ba && valid_sol_a)
-  {
-    // std::cout << "\tvalid_sol_ba && valid_sol_a" << std::endl;
-    qarm_temp << q_a(0), q_a(1), q_elbow_ba(0), q_elbow_ba(1);
-    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
-    // if (is_closer)
-      // std::cout << "\t\tselected valid_sol_ba && valid_sol_a" << std::endl;
-  }
   if (valid_sol_ba && valid_sol_b)
   {
     // std::cout << "\tvalid_sol_ba && valid_sol_b" << std::endl;
@@ -275,14 +267,6 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
     is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
     // if (is_closer)
       // std::cout << "\t\tselected valid_sol_ba && valid_sol_b" << std::endl;
-  }
-  if (valid_sol_bb && valid_sol_a)
-  {
-    // std::cout << "\tvalid_sol_bb && valid_sol_a" << std::endl;
-    qarm_temp << q_a(0), q_a(1), q_elbow_bb(0), q_elbow_bb(1);
-    is_closer=updateIfCloser(qarm_temp,qarm_previous,qarm,q_distance);
-    // if (is_closer)
-      // std::cout << "\t\tselected valid_sol_bb && valid_sol_a" << std::endl;
   }
   if (valid_sol_bb && valid_sol_b)
   {
@@ -432,7 +416,8 @@ void Human28DOF::leftLimbFk_tfs(const Eigen::VectorXd& qarm,
 void Human28DOF::trunkIk(const keypoints& measures_in_ext,
                          const std::vector<JointLimits>& qtrunk_bounds,
                          Eigen::VectorXd& q,
-                         Eigen::VectorXd& param)
+                         Eigen::VectorXd& param,
+                         Eigen::Vector4d& chest_q_rotated)
 {
   // Configuration
   q.resize(7+3);
@@ -487,6 +472,9 @@ void Human28DOF::trunkIk(const keypoints& measures_in_ext,
   if (chest_q.w() < 0) {
     chest_q.coeffs() *= -1.0;
   }
+
+  // Convert chest_q to RPY
+  chestQuatRotated(chest_q, chest_q_rotated);
 
   Eigen::Affine3d T_ext_chest;
   T_ext_chest=chest_q;
@@ -745,7 +733,8 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
                     const std::vector<JointLimits>& qbounds,
                     const Eigen::VectorXd& configuration_previous,
                     Eigen::VectorXd& configuration,
-                    Eigen::VectorXd& param)
+                    Eigen::VectorXd& param,
+                    Eigen::Vector4d& chest_q_rotated)
 {
   // 7 dof for chest (tra+quat)
   // 1 dof: shoulder rotation is the rotation around chest_x_in_ext (frontal direction)
@@ -770,7 +759,7 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
   Eigen::Affine3d T_ext_rhip;
   Eigen::Affine3d T_ext_lhip;
   Eigen::Affine3d T_ext_chest;
-  trunkIk(measures_in_ext,q_trunk_bounds,q_trunk,trunk_param);
+  trunkIk(measures_in_ext,q_trunk_bounds,q_trunk,trunk_param,chest_q_rotated);
   trunkFk(q_trunk,
           trunk_param,
           T_ext_rshoulder,
@@ -922,14 +911,16 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
 }
 
 
-std::pair<Eigen::VectorXd, Eigen::VectorXd> Human28DOF::ik_binding(const keypoints& measures_in_ext,
-                                                                   const std::vector<JointLimits>& joint_limits,
-                                                                   const Eigen::VectorXd& configuration_previous,
-                                                                   Eigen::VectorXd& configuration,
-                                                                   Eigen::VectorXd& param)
+std::tuple<Eigen::VectorXd,Eigen::VectorXd,Eigen::Vector4d> Human28DOF::ik_binding(
+  const keypoints& measures_in_ext,
+  const std::vector<JointLimits>& joint_limits,
+  const Eigen::VectorXd& configuration_previous,
+  Eigen::VectorXd& configuration,
+  Eigen::VectorXd& param,
+  Eigen::Vector4d& chest_q_rotated)
 {
-  Human28DOF::ik(measures_in_ext,joint_limits,configuration_previous,configuration,param);
-  return std::make_pair(configuration,param);
+  Human28DOF::ik(measures_in_ext,joint_limits,configuration_previous,configuration,param,chest_q_rotated);
+  return std::make_tuple(configuration,param,chest_q_rotated);
 }
 
 

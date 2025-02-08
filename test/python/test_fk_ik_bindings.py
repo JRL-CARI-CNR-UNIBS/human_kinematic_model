@@ -113,7 +113,11 @@ def test_kinematics():
 
         q2 = np.zeros(n_dof)
         param2 = np.zeros(n_param)
-        q2, param2 = model.inverse_kinematics(kp_in_ext, qbounds, q, q2, param2) # use q as previous configuration
+        chest_q_rotated = np.zeros(4)
+
+        # Call inverse kinematics using q as previous configuration
+        q2, param2, chest_q_rotated = \
+            model.inverse_kinematics(kp_in_ext, qbounds, q, q2, param2, chest_q_rotated)
 
         print("\nq2 [before fk]:        \n", q2)
         print("\ndiff q [before fk]:    \n", (q-q2))

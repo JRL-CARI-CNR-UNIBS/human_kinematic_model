@@ -30,7 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <rdyn_core/primitives.h>
 #include <map>
-
+#include <tuple>
 
 namespace human_model
 {
@@ -98,14 +98,18 @@ public:
                  const std::vector<JointLimits>& joint_limits,
                  const Eigen::VectorXd& configuration_previous,
                  Eigen::VectorXd& configuration,
-                 Eigen::VectorXd& param);
+                 Eigen::VectorXd& param,
+                 Eigen::Vector4d& chest_q_rotated);
 
   // Used to return values beyond modifying the input arguments
-  static std::pair<Eigen::VectorXd, Eigen::VectorXd> ik_binding(const keypoints& measures_in_ext,
-                                                                const std::vector<JointLimits>& joint_limits,
-                                                                const Eigen::VectorXd& configuration_previous,
-                                                                Eigen::VectorXd& configuration,
-                                                                Eigen::VectorXd& param);
+  static std::tuple<Eigen::VectorXd,Eigen::VectorXd,Eigen::Vector4d> ik_binding(
+    const keypoints& measures_in_ext,
+    const std::vector<JointLimits>& joint_limits,
+    const Eigen::VectorXd& configuration_previous,
+    Eigen::VectorXd& configuration,
+    Eigen::VectorXd& param,
+    Eigen::Vector4d& chest_q_rotated
+  );
 
   static void fk(const Eigen::VectorXd& configuration,
                  const Eigen::VectorXd& param,
@@ -136,7 +140,8 @@ public:
   static void trunkIk(const keypoints& measures_in_ext,
                       const std::vector<JointLimits>& qtrunk_bounds,
                       Eigen::VectorXd& q,
-                      Eigen::VectorXd& param);
+                      Eigen::VectorXd& param,
+                      Eigen::Vector4d& chest_q_rotated);
 
   static void trunkFk(const Eigen::VectorXd& q,
                       const Eigen::VectorXd& param,
@@ -201,6 +206,9 @@ public:
   // friend std::ostream& operator<<(std::ostream& os, const keypoints& keypoints); // is this function ever used?
 
 private:
+  static void chestQuatRotated(const Eigen::Quaterniond& qchest,
+                               Eigen::Vector4d& chest_q_rotated);
+
   static void computeWristIn2(const Eigen::Vector2d& qshoulder,
                               const Eigen::Vector3d& wrist_in_limb,
                               Eigen::Vector3d& wrist_in_2);

@@ -29,6 +29,7 @@ protected:
   human_model::keypoints kp_in_ext;
   human_model::keypoints kp2_in_ext;
   human_model::keypoints diff_in_ext;
+  Eigen::Vector4d chest_q_rotated;
 
   std::random_device rd;  // Seed for the random number engine
   std::mt19937 gen; // Standard mersenne_twister_engine seeded with rd()
@@ -77,6 +78,7 @@ protected:
     kp_in_ext.set_keypoints(init_keypoints);
     kp2_in_ext.set_keypoints(init_keypoints);
     diff_in_ext.set_keypoints(init_keypoints);
+    chest_q_rotated.setZero();
 
     // Initialize joint limits
     // (Vector Initialization: The vector qbounds is initialized with n_dof elements,
@@ -169,7 +171,7 @@ TEST_F(HumanKinematicModelTest, TestFkIk) {
 
     // Compute the forward kinematics and inverse kinematics
     human_model::Human28DOF::fk(q,param,kp_in_ext);
-    human_model::Human28DOF::ik(kp_in_ext,qbounds,q,q2,param2); // use q as previous configuration
+    human_model::Human28DOF::ik(kp_in_ext,qbounds,q,q2,param2,chest_q_rotated); // use q as previous configuration
 
     std::cout << "\nq2 [before fk]           : \n" << q2.transpose() << std::endl;
     std::cout << "\ndiff q [before fk]       : \n" << (q-q2).transpose() << std::endl;
