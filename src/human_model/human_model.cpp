@@ -31,6 +31,66 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace human_model
 {
 
+void Human28DOF::setDefaultJointLimits(std::vector<JointLimits>& qbounds)
+{
+  // Set the joint limits
+  qbounds.resize(28, human_model::JointLimits(-M_PI, M_PI));
+
+  // Set the chest translation and rotation limits
+  // NOT USED BY THE HUMAN MODEL, JUST FOR DEBUGGING PURPOSES
+  qbounds[0] = human_model::JointLimits( 0.0, 2.0);               // q0_chest_x
+  qbounds[1] = human_model::JointLimits(-2.5, 2.5);               // q1_chest_y
+  qbounds[2] = human_model::JointLimits( 0.8, 1.8);               // q2_chest_z
+  qbounds[3] = human_model::JointLimits(-1.0, 1.0);               // q3_chest_qx
+  qbounds[4] = human_model::JointLimits(-1.0, 1.0);               // q4_chest_qy
+  qbounds[5] = human_model::JointLimits(-1.0, 1.0);               // q5_chest_qz
+  qbounds[6] = human_model::JointLimits(-1.0, 1.0);               // q6_chest_qw
+  
+  // Set the shoulder axis limits    
+  qbounds[7] = human_model::JointLimits(-M_PI / 2, M_PI / 2);     // q7_shoulder_rotx
+  
+  // Set the hip axis limits    
+  qbounds[8] = human_model::JointLimits(-M_PI / 2, M_PI / 2);     // q8_hip_rotz
+  qbounds[9] = human_model::JointLimits(-M_PI / 4, M_PI / 4);     // q9_hip_rotx
+
+  // Set the right and left shoulder limits 
+  qbounds[10] = human_model::JointLimits(-M_PI, M_PI / 2);        // q10_rshoulder_rotz
+  qbounds[11] = human_model::JointLimits(-M_PI, M_PI / 2);        // q11_rshoulder_rotx
+  qbounds[12] = human_model::JointLimits(-0.75*M_PI, 0.75*M_PI);  // q12_rshoulder_roty
+  qbounds[14] = human_model::JointLimits(-M_PI, M_PI /2);         // q14_lshoulder_rotz
+  qbounds[15] = human_model::JointLimits(-M_PI, M_PI /2);         // q15_lshoulder_rotx
+  qbounds[16] = human_model::JointLimits(-0.75*M_PI, 0.75*M_PI);  // q16_lshoulder_roty
+  
+  // Set the right and left elbow limits 
+  qbounds[13] = human_model::JointLimits(-M_PI, 0.0);             // q13_relbow_rotz
+  qbounds[17] = human_model::JointLimits(-M_PI, 0.0);             // q17_lelbow_rotz
+
+  // Set the right and left hip limits 
+  qbounds[18] = human_model::JointLimits(-M_PI / 4, 0.75*M_PI);   // q18_rhip_rotz
+  qbounds[19] = human_model::JointLimits(-M_PI / 2, M_PI / 2);    // q19_rhip_rotx
+  qbounds[20] = human_model::JointLimits(-0.75*M_PI, 0.75*M_PI);  // q20_rhip_roty
+  qbounds[22] = human_model::JointLimits(-M_PI / 4, 0.75*M_PI);   // q22_lhip_rotz
+  qbounds[23] = human_model::JointLimits(-M_PI, M_PI / 2);        // q23_lhip_rotx
+  qbounds[24] = human_model::JointLimits(-0.75*M_PI, 0.75*M_PI);  // q24_lhip_roty
+
+  // Set the right and left knee limits 
+  qbounds[21] = human_model::JointLimits(0.0, M_PI);              // q21_rknee_rotz
+  qbounds[25] = human_model::JointLimits(0.0, M_PI);              // q25_lknee_rotz
+
+  // Set the head limits
+  qbounds[26] = human_model::JointLimits(-M_PI / 2, M_PI / 2);    // q26_head_rotx
+  qbounds[27] = human_model::JointLimits(-M_PI / 2, M_PI / 2);    // q27_head_roty
+}
+
+
+std::vector<JointLimits> Human28DOF::setDefaultJointLimits_binding()
+{
+  std::vector<JointLimits> qbounds;
+  Human28DOF::setDefaultJointLimits(qbounds);
+  return qbounds;
+}
+
+
 void Human28DOF::chestQuatRotated(const Eigen::Quaterniond& qchest,
                                   Eigen::Vector4d& qchest_rot)
 {
@@ -103,14 +163,22 @@ bool Human28DOF::shoulderIk(const Eigen::Vector3d& elbow_in_limb,
     // Solution 2: Hypothesis -PI<q2<-PI/2 or PI/2<q2<PI (cos(q2)<0)
     q1=std::atan2(elbow_in_limb(0),-elbow_in_limb(1));
     
+  // std::cout << " q1: " << q1 << std::endl;
+  // std::cout << "[q1] " << "elbow_in_limb(0): " << elbow_in_limb(0) << " elbow_in_limb(1): " << elbow_in_limb(1) << std::endl;
+
   // q2: SHOULDER ROT X
   if (std::abs(std::sin(q1))>0.5)
     q2=std::atan2(elbow_in_limb(2),-elbow_in_limb(0)/std::sin(q1));
   else
     q2=std::atan2(elbow_in_limb(2),elbow_in_limb(1)/std::cos(q1));
 
+  // std::cout << " q2: " << q2 << std::endl;
+  // std::cout << "[q2] " << "elbow_in_limb(2): " << elbow_in_limb(2) << " sin(q1): " << std::sin(q1) << " cos(q1): " << std::cos(q1) << std::endl;
+
   // check if the solution is within the joint limits
   bool valid_solution=(q1>q1min && q1<q1max && q2>q2min && q2<q2max);
+
+  // std::cout << "valid_solution: " << valid_solution << std::endl;
   
   // check if the solution is valid
   if (first_solution)
@@ -215,6 +283,9 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
   bool valid_sol_a=shoulderIk(elbow_in_limb,q_shoulder_bounds,true,q_a);  // first solution
   bool valid_sol_b=shoulderIk(elbow_in_limb,q_shoulder_bounds,false,q_b); // second solution
 
+  // std::cout << "qa: " << q_a << std::endl;
+  // std::cout << "qb: " << q_b << std::endl;
+
   // // Throw exception if there is no solution with the
   // // SHOULDER ROT Z and SHOULDER ROT X within the limits
   // if (!valid_sol_a && !valid_sol_b)
@@ -276,12 +347,18 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
     // if (is_closer)
       // std::cout << "\t\tselected valid_sol_bb && valid_sol_b" << std::endl;
   }
-  // Throw an exception if there is no valid solution
+  // If there is no valid solution, set q1, q2, q3, q5 to NaN and possibly throw an exception
   if (!valid_sol_aa && !valid_sol_ab && !valid_sol_ba && !valid_sol_bb)
   {
     q1, q2, q3, q5 = std::nan("");
     // throw std::runtime_error("No solution for the SHOULDER ROT Z, SHOULDER ROT X, SHOULDER ROT Y, and ELBOW ROT Z within the limits.");
   }
+
+  // // Print q1, q2, q3, q5 if any of them is very close to zero
+  // if (std::abs(q1)<1e-6 || std::abs(q2)<1e-6 || std::abs(q3)<1e-6 || std::abs(q5)<1e-6)
+  // {
+  //   std::cout << "q1: " << q1 << " | q2: " << q2 << " | q3: " << q3 << " | q5: " << q5 << std::endl;
+  // }
 }
 
 
@@ -828,6 +905,8 @@ void Human28DOF::ik(const keypoints& measures_in_ext,
               q_right_arm_bounds,
               q_right_arm_previous,
               q_right_arm);
+
+  // std::cout << "q_right_arm: " << q_right_arm << std::endl;
 
   // std::cout << "left arm IK" << std::endl;
   leftLimbIk(lelbow_in_lshoulder,

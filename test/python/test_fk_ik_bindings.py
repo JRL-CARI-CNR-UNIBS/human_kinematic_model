@@ -56,13 +56,7 @@ n_dof = 7+3+4*4+2
 n_param = 3+2+2+1
 
 # Initialize joint limits
-qbounds = [JointLimits(-np.pi, np.pi)]*n_dof
-
-# Set the shoulder rot y joint limits
-qbounds[12] = JointLimits(-np.pi/2, np.pi/2) # right shoulder
-qbounds[16] = JointLimits(-np.pi/2, np.pi/2) # left shoulder
-qbounds[20] = JointLimits(-np.pi/2, np.pi/2) # right hip
-qbounds[24] = JointLimits(-np.pi/2, np.pi/2) # left hip
+qbounds = Human28DOF.default_joint_limits()
 
 
 def test_fk():
@@ -93,9 +87,14 @@ def test_kinematics():
         print("\n===============================================================")
         print("Test iteration: ", idx)
 
-        # Randomly generate configuration vector
-        q = np.random.rand(n_dof)
-        q[3:7] /= np.linalg.norm(q[3:7]) # Normalize chest rotation quaternion
+        # Randomly generate configuration vector drawn from uniform distribution
+        # bewteen the joint limits
+        q = np.zeros(n_dof)
+        for i in range(n_dof):
+            q[i] = np.random.uniform(qbounds[i].min, qbounds[i].max)
+
+        # Normalize chest rotation quaternion
+        q[3:7] /= np.linalg.norm(q[3:7]) 
 
         # If the scalar part of the quaternion is negative,
         # multiply by -1 to ensure consistent representation

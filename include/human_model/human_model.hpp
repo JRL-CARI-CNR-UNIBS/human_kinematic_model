@@ -200,6 +200,8 @@ public:
                          const Eigen::VectorXd& qarm_previous,
                          Eigen::VectorXd& qarm);
 
+  static void setDefaultJointLimits(std::vector<JointLimits>& qbounds);
+  static std::vector<JointLimits> setDefaultJointLimits_binding();
 
   static void print(const Eigen::VectorXd& q,
                     const Eigen::VectorXd& param);
