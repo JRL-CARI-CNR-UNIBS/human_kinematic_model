@@ -40,4 +40,4 @@ Average time taken to run the `test_fk_ik.cpp` or `test_fk_ik.py` or `test_fk_ik
 - C++ (Release): **4.2 s**
 - C++ (Debug): **8.3 s**
 - Python (pure): **24.0 s**
-- Python (bindings): **6.7 s**
+- Python (bindings): **6.6 s**
