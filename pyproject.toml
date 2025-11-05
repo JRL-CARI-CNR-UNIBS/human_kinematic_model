@@ -1,10 +1,6 @@
 [build-system]
-requires = [
-    "setuptools>=61.0.0",
-    "wheel",
-    "pybind11",
-]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core", "pybind11"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "human_model"
@@ -13,11 +9,10 @@ description = "A human model package"
 authors = [
     { name = "Michele Ferrari", email = "michele.ferrari@unibs.it" }
 ]
-dependencies = [
-    # List your dependencies here
-    "numpy",
-    "scipy",
-]
 
-[tool.setuptools.packages.find]
-where = ["scripts"]
+# Tell scikit-build to use Unix Makefiles generator to avoid installing Ninja
+[tool.scikit-build.cmake]
+args = ["-GUnix Makefiles"]
+
+# [tool.scikit-build] or [tool.setuptools.packages.find] tags are not needed 
+# because there’s no Python source package — only the compiled extension.

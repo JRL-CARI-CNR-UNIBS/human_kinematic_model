@@ -1,5 +1,21 @@
 # Human Kinematic Model
 
+## Prerequisites
+1. If testing is enabled:
+    ```sh
+    sudo apt-get install libgtest-dev
+    ```
+2. If bindings are enabled, install pybind11 in the python environment where you want to use this packages's bindings
+    ```sh
+    conda activate <env_name> # first activate the virtual environment
+    conda install -c conda-forge pybind11
+    ```
+3. Install dependencies
+   1. Eigen3
+        ```sh
+        sudo apt install libeigen3-dev
+        ```
+
 ## Installation (using colcon)
 
 1. **Create a workspace**:
@@ -24,6 +40,8 @@
     ```
 
 5. **Update the `.bashrc` file**:
+   
+    _The following instructions apply only when performing a global installation of the package!_
 
     Add the following lines to update the `PYTHONPATH` and `LD_LIBRARY_PATH`:
 

@@ -28,7 +28,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include <rdyn_core/primitives.h>
+//#include <rdyn_core/primitives.h>
+#include <Eigen/Geometry>
+#include <iostream>
+#include <string>
 #include <map>
 #include <tuple>
 

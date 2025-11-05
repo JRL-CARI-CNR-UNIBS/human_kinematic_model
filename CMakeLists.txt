@@ -28,7 +28,7 @@ option(BUILD_EXAMPLE            "COMPILE THE EXAMPLE" OFF)
 #############################
 ## DEPENDENCIES            ##
 #############################
-find_package(rdyn_core REQUIRED)
+find_package(Eigen3 REQUIRED COMPONENTS Geometry)
 
 cnr_enable_testing(ENABLE_TESTING ENABLE_COVERAGE_TESTING USE_ROS1)
 
@@ -64,7 +64,7 @@ target_include_directories(human_model PUBLIC
 # Link other libraries
 target_link_libraries(human_model
   PUBLIC
-  rdyn_core::rdyn_core
+  Eigen3::Eigen
 )
 
 # Create an alias
@@ -97,7 +97,6 @@ target_include_directories(human_model_binding PRIVATE
 # Link other libraries
 target_link_libraries(human_model_binding
   PRIVATE
-  rdyn_core::rdyn_core
   human_model::human_model
 )
 
