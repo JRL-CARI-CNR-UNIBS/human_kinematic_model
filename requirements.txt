@@ -1,0 +1,12 @@
+# Python dependencies of the python translation, the JAX model, the tests and the binding build.
+# The C++ library itself only needs Eigen (and gtest for test/test_fk_ik.cpp), see package.xml.
+#   pip install -r requirements.txt
+# For the JAX model on an NVIDIA GPU install the CUDA build instead of plain jax, e.g.
+#   pip install -U "jax[cuda13]"
+
+numpy
+scipy          # python translation (scripts/human_kinematic_model.py)
+jax            # JAX model (scripts/human_kinematic_model_jax.py)
+pybind11       # building the human_model_binding extension
+pytest         # test/python
+sympy          # symbolic checks in test/python/test_head.py, test_trunk.py, test_right_arm.py

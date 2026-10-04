@@ -1,20 +1,64 @@
 # Human Kinematic Model
 
+A 28-DOF kinematic model of the human body. Forward kinematics (FK) maps a configuration `q` and 8 body
+parameters `param` to 13 3D keypoints. Inverse kinematics (IK) maps the keypoints back to `(q, param)` in closed form.
+
+The model comes in three implementations that return the same results (to floating-point rounding, ~1e-13 in double
+precision):
+
+| Implementation | Where | Notes |
+|---|---|---|
+| C++ (reference) | `include/human_model/human_model.hpp`, `src/human_model/human_model.cpp` | `human_model::Human28DOF`, Eigen |
+| Python bindings of the C++ class | `src/human_model/bindings.cpp` | module `human_model_binding` (pybind11) |
+| Python translation | `scripts/human_kinematic_model.py` | `HumanProcess`, numpy + scipy |
+| JAX | `scripts/human_kinematic_model_jax.py` | `jit`/`vmap`/`grad`-compatible, same code on CPU and GPU |
+
+`test/python/test_jax_equivalence.py` checks that they agree.
+
+## Model conventions
+
+- **Configuration `q` (28)**
+  - `[0:3]` chest position
+  - `[3:7]` chest quaternion `(x, y, z, w)`, scalar last, with `w >= 0`
+  - `[7]` shoulder rot x, `[8:10]` hip rot z, hip rot x
+  - `[10:14]` right arm, `[14:18]` left arm, `[18:22]` right leg, `[22:26]` left leg; each limb is
+    (shoulder/hip rot z, rot x, rot y, elbow/knee rot z)
+  - `[26:28]` head rot x, head rot y
+- **Parameters `param` (8):** shoulder distance, chest-hip distance, hip distance, upper arm length, lower arm length,
+  upper leg length, lower leg length, head distance.
+- **Keypoints (13):** head, left shoulder, left elbow, left wrist, left hip, left knee, left ankle, right shoulder,
+  right elbow, right wrist, right hip, right knee, right ankle. This is the order of `Keypoints.get_keypoints()` and
+  of the `(13, 3)` arrays of the JAX model.
+- **Chest frame:** x frontal, y from the right to the left shoulder, z from the lower to the upper chest.
+- **Joint limits:** `Human28DOF.default_joint_limits()` (C++/bindings) and `default_joint_limits()` (JAX, as a
+  `(28, 2)` array). Entries 0–6 (chest pose) are not used by the model.
+
+### FK and IK behavior
+
+- FK normalizes the chest quaternion, so non-unit quaternions still give a rotation. A zero quaternion is left
+  unchanged (identity rotation), as Eigen's `normalize()` does.
+- IK takes the previous configuration: `inverse_kinematics(keypoints, joint_limits, q_previous)` returns
+  `(q, param, chest_q_rotated)`. `chest_q_rotated` is the chest quaternion rotated by 180° about its z axis.
+- Each limb has up to 4 IK solutions (2 for the shoulder × 2 for the elbow). The IK keeps those strictly inside the
+  joint limits and returns the one closest to `q_previous`. Hip and head take the first of 2 solutions that is within
+  the limits.
+- **Invalid solutions are NaN, never exceptions.** A limb with no valid solution has all four joints NaN; an invalid
+  hip or head gives NaN angles. A shoulder rotation outside its limits gives NaN `q[7]`, and therefore NaN for both
+  arms, while the rest of the IK is still computed.
+
 ## Prerequisites
-1. If testing is enabled:
+
+1. System dependencies (the rosdep keys are in `package.xml`):
     ```sh
-    sudo apt-get install libgtest-dev
+    sudo apt install libeigen3-dev   # C++ library
+    sudo apt install libgtest-dev    # C++ tests
+    sudo apt install pybind11-dev    # Python bindings (or pip/conda install pybind11 in your environment)
     ```
-2. If bindings are enabled, install pybind11 in the python environment where you want to use this packages's bindings
+2. Python dependencies (python translation, JAX model, tests, binding build), in the environment where you will use them:
     ```sh
-    conda activate <env_name> # first activate the virtual environment
-    conda install -c conda-forge pybind11
+    pip install -r requirements.txt
     ```
-3. Install dependencies
-   1. Eigen3
-        ```sh
-        sudo apt install libeigen3-dev
-        ```
+    For the JAX model on an NVIDIA GPU, install the CUDA build of JAX, e.g. `pip install -U "jax[cuda13]"`.
 
 ## Installation (using colcon)
 
@@ -38,9 +82,15 @@
     ```sh
     colcon build --symlink-install --continue-on-error --packages-select human_model
     ```
+    This builds the `libhuman_model.so` library, the `human_model_binding` Python module and, with `ENABLE_TESTING`
+    (on by default), the `human_model_test` gtest and the `human_model_benchmark` speed test.
+
+    > **Note:** CMake runs `pip install -e` on the repository while *configuring*, with the Python found by CMake
+    > (the active virtualenv or conda environment if there is one, otherwise `--user`). Activate the environment you
+    > want the package installed in before building.
 
 5. **Update the `.bashrc` file**:
-   
+
     _The following instructions apply only when performing a global installation of the package!_
 
     Add the following lines to update the `PYTHONPATH` and `LD_LIBRARY_PATH`:
@@ -52,10 +102,155 @@
 
     This will allow you to import the `human_model_binding` python module and let it find the C++ `libhuman_model.so` shared library.
 
+### Building the bindings for a specific Python environment (without CMake)
+
+The binding has to be compiled for the Python version that imports it. To build it quickly for a given environment
+(e.g. a virtualenv with JAX), without CMake and without installing anything, compile it into the git-ignored `build/`
+folder. The Python tests look for it in `build/python/`, or in `$HUMAN_MODEL_BINDING_DIR`.
+```sh
+PY=/path/to/env/bin/python   # needs pybind11 (pip install -r requirements.txt)
+mkdir -p build/python
+c++ -O3 -DNDEBUG -shared -std=c++17 -fPIC $($PY -m pybind11 --includes) -I include -I /usr/include/eigen3 \
+    src/human_model/human_model.cpp src/human_model/bindings.cpp \
+    -o build/python/human_model_binding$($PY -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
+```
+The native benchmark and the gtest can be built in the same way:
+```sh
+c++ -O3 -DNDEBUG -std=c++17 -I include -I /usr/include/eigen3 \
+    src/human_model/human_model.cpp test/benchmark_fk_ik.cpp -o build/benchmark_fk_ik
+c++ -O3 -DNDEBUG -std=c++17 -DPROJECT_SRC_DIRECTORY=\"$PWD\" -I include -I /usr/include/eigen3 \
+    src/human_model/human_model.cpp test/test_fk_ik.cpp -o build/human_model_test -lgtest -lpthread
+```
+
+## Usage
+
+### C++
+```cpp
+#include <human_model/human_model.hpp>
+
+std::vector<human_model::JointLimits> qbounds;
+human_model::Human28DOF::setDefaultJointLimits(qbounds);
+
+human_model::keypoints kp;
+human_model::Human28DOF::fk(q, param, kp);
+
+Eigen::VectorXd q2, param2;
+Eigen::Vector4d chest_q_rotated;
+human_model::Human28DOF::ik(kp, qbounds, q_previous, q2, param2, chest_q_rotated);
+```
+
+### Python bindings
+Every function returns its outputs. Transforms are 4×4 numpy arrays.
+```python
+from human_model_binding import Human28DOF, Keypoints
+
+limits = Human28DOF.default_joint_limits()
+kp = Human28DOF.forward_kinematics(q, param)                            # -> Keypoints
+q2, param2, chest_q_rotated = Human28DOF.inverse_kinematics(kp, limits, q_previous)
+tfs = Human28DOF.forward_kinematics_tfs(q, param)                       # {"T_ext_rshoulder": 4x4, ...}, 18 frames
+distance, diff = Keypoints.keypoint_distance(kp, kp2)
+```
+The partial functions are bound too:
+- `trunkFk`, `trunkIk`, `headFk`, `headIk`;
+- `rightLimbFk`, `leftLimbFk`, `rightLimbFk_tfs`, `leftLimbFk_tfs`;
+- `rightLimbIk`, `leftLimbIk`.
+
+The older in-place signatures `forward_kinematics(q, param, kp)` and
+`inverse_kinematics(kp, limits, q_previous, q, param, chest_q_rotated)` still work.
+
+### Python translation
+```python
+from human_kinematic_model import HumanProcess, Keypoints, JointLimits   # with scripts/ on sys.path
+
+model = HumanProcess()
+kp = Keypoints()
+kp.set_keypoints(model.forward_kinematics(q, param))                   # dict {name: (3,)}
+limits = [JointLimits(lo, hi) for lo, hi in default_limits]            # 28 JointLimits
+q2, param2, chest_q_rotated = model.inverse_kinematics(kp, limits, q_previous)
+```
+
+### JAX
+```python
+import jax
+jax.config.update("jax_enable_x64", True)   # to reproduce the C++ double-precision results
+import human_kinematic_model_jax as hkm       # with scripts/ on sys.path
+
+limits = hkm.default_joint_limits()                          # (28, 2)
+kp = hkm.fk(q, param)                                        # (13, 3)
+q2, param2, chest_q_rotated = hkm.ik(kp, limits, q_previous)
+
+kp_batch = hkm.fk_batch(q_batch, param_batch)                # jitted and vectorized over the first axis
+ik_batch = hkm.ik_batch(kp_batch, limits, q_previous_batch)
+J = jax.jacfwd(hkm.fk)(q, param)                             # (13, 3, 28)
+```
+- **Devices.** The same functions run on CPU or GPU, depending on where the inputs are, e.g.
+  `jax.device_put(q_batch, jax.devices("gpu")[0])`.
+- **Precision.** float32 inputs stay float32 (≈4e-7 m keypoint error); on GPUs this is much faster than float64.
+- **Other functions.** `fk_tfs` (18 frames), the partial functions (`trunk_fk`, `trunk_ik`, `head_fk`, `head_ik`,
+  `right_limb_fk`, `left_limb_fk`, `right_limb_ik`, `left_limb_ik`, ...), and helpers to convert binding or python
+  objects (`keypoints_to_array`, `keypoints_to_dict`, `joint_limits_to_array`).
+
+## Tests
+
+- C++: `human_model_test` (gtest, 10k random FK → IK → FK round trips; it prints every iteration).
+- Python, from the repository root:
+    ```sh
+    python -m pytest test/python/test_jax_equivalence.py -v                            # equivalence of all implementations
+    python -m pytest test/python -q --ignore=test/python/test_jax_equivalence.py      # older tests
+    ```
+  The equivalence tests compare the JAX model with the C++ bindings and with the python translation. They run on
+  every available device (CPU, GPU) and cover:
+  - FK, and IK round trips;
+  - solution selection with a different `q_previous`;
+  - NaN cases, and non-unit and zero quaternions;
+  - all the partial functions and transforms;
+  - float32 inputs, and the FK/IK Jacobians.
+
+  The C++ comparisons are skipped if `human_model_binding` cannot be imported. `test/python/conftest.py` enables JAX
+  64-bit floats and puts `scripts/` and `build/python/` on `sys.path`.
 
 ## Speedtest
-Average time taken to run the `test_fk_ik.cpp` or `test_fk_ik.py` or `test_fk_ik_bindings.py` script that executes **10k times** the loop (direct kinematics -> inverse kinematics -> direct kinematics):
-- C++ (Release): **4.2 s**
-- C++ (Debug): **8.3 s**
-- Python (pure): **24.0 s**
-- Python (bindings): **6.6 s**
+
+Time per **iteration**, in milliseconds, measured by `python test/python/benchmark_jax.py`. One iteration processes one
+configuration `q`:
+
+1. forward kinematics: `(q, param)` → 13 keypoints;
+2. inverse kinematics: keypoints → `(q, param)`, with the original `q` as the previous configuration;
+3. forward kinematics again, on the IK result.
+
+The configurations are drawn at random within the default joint limits. Each time is an average: over 10k configurations
+for native C++ and batched JAX, and over the first 1000 for the loops driven from Python (bindings, pure Python, single JAX
+calls).
+
+- **C++ and Python** run one iteration at a time.
+- **JAX** is timed in two ways:
+  - *single*: one jitted call per configuration, waiting for each result. This is the latency of one iteration, e.g. one
+    frame of a filter.
+  - *batched*: one jitted call on all 10k configurations at once (`vmap`), divided by 10k. This is the cost per
+    configuration when many are processed together.
+- The first call of each JAX variant also compiles it (~1–2 s); that call is excluded.
+
+The native row runs `human_model_benchmark` (`build/benchmark_fk_ik` in the direct build; set `$HUMAN_MODEL_BENCHMARK`
+to use another executable).
+
+Intel Core Ultra 7 255HX, NVIDIA GeForce RTX 5060 Laptop GPU; C++ built with `-O3`:
+
+| Implementation | Time per iteration |
+|---|---|
+| C++ (native, Release) | **0.0042 ms** |
+| C++ through the Python bindings | **0.0064 ms** |
+| Python (pure) | **1.1 ms** |
+| JAX, CPU, float64, single | **0.053 ms** |
+| JAX, CPU, float32, single | **0.052 ms** |
+| JAX, GPU, float64, single | **0.75 ms** |
+| JAX, GPU, float32, single | **0.43 ms** |
+| JAX, CPU, float64, batched | **0.0081 ms** |
+| JAX, CPU, float32, batched | **0.015 ms** |
+| JAX, GPU, float64, batched | **0.0014 ms** |
+| JAX, GPU, float32, batched | **0.00009 ms** |
+
+A single iteration is fastest in C++, even through the bindings. For one iteration at a time the GPU is the slowest
+option, since every call pays the kernel-launch overhead; it only pays off when many configurations are batched together.
+
+The previous figures in this README (10k iterations: C++ Release 4.2 s, Debug 8.3 s, bindings 6.6 s, pure Python 24.0 s)
+came from `test_fk_ik.cpp` / `test_fk_ik*.py`. Those print every iteration, so they mostly measured printing.

@@ -257,15 +257,12 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
                              const Eigen::VectorXd& qarm_previous,
                              Eigen::VectorXd& qarm)
 {
-  // Configuration
-  double& q1=qarm(0);  // shoulder rot z
-  double& q2=qarm(1);  // shoulder rot x
-  double& q3=qarm(2);  // shoulder rot y
-  double& q5=qarm(3);  // elbow rot z
+  // Configuration: qarm = (q1, q2, q3, q5)
+  // q1: shoulder rot z, q2: shoulder rot x, q3: shoulder rot y, q5: elbow rot z
+  qarm.resize(4);
 
   // Parameters
-  const double& q4=param(0);  // upper arm length
-  const double& q6=param(1);  // lower arm length
+  const double& q4=param(0);  // upper arm length (q6=param(1), the lower arm length, is not needed)
 
   // Joint limits
   std::vector<JointLimits> q_shoulder_bounds = {
@@ -347,10 +344,11 @@ void Human28DOF::rightLimbIk(const Eigen::Vector3d& elbow_in_limb,
     // if (is_closer)
       // std::cout << "\t\tselected valid_sol_bb && valid_sol_b" << std::endl;
   }
-  // If there is no valid solution, set q1, q2, q3, q5 to NaN and possibly throw an exception
-  if (!valid_sol_aa && !valid_sol_ab && !valid_sol_ba && !valid_sol_bb)
+  // If no solution has been selected (no valid solution, or no finite distance from the previous
+  // configuration), set q1, q2, q3, q5 to NaN and possibly throw an exception
+  if (!(q_distance < std::numeric_limits<double>::infinity()))
   {
-    q1, q2, q3, q5 = std::nan("");
+    qarm.setConstant(std::numeric_limits<double>::quiet_NaN());
     // throw std::runtime_error("No solution for the SHOULDER ROT Z, SHOULDER ROT X, SHOULDER ROT Y, and ELBOW ROT Z within the limits.");
   }
 
@@ -567,8 +565,10 @@ void Human28DOF::trunkIk(const keypoints& measures_in_ext,
   Eigen::Vector3d shoulder_versor_in_chest=T_ext_chest.linear().inverse()*shoulder_versor_in_ext;
 
   shoulder_rotx=std::atan2(shoulder_versor_in_chest(2),shoulder_versor_in_chest(1));
+  // Assign nan if the shoulder rotation is out of bounds (the bounds themselves are allowed),
+  // as for the other invalid solutions: the shoulder frames, and therefore both arms, become nan too
   if (shoulder_rotx<shoulder_rotx_min || shoulder_rotx>shoulder_rotx_max)
-    throw std::runtime_error("Shoulder rotation out of bounds.");
+    shoulder_rotx=std::nan("");
 
   // ### HIP ROT Z and HIP ROT X ###
   Eigen::Vector3d hip_versor_in_chest=T_ext_chest.linear().inverse()*hip_versor_in_ext;
@@ -631,8 +631,10 @@ void Human28DOF::trunkFk(const Eigen::VectorXd& q,
 
   // CHEST REFERENCE FRAME:
   // chest orientation (quaternion in scalar-last form)
+  // (normalized, so that non-unit quaternions still give a rotation; a zero quaternion is left unchanged)
   Eigen::Quaterniond chest_q;
   chest_q.coeffs()=q.block(3,0,4,1);
+  chest_q.normalize();
   T_ext_chest=chest_q;
 
   // 3D position of the chest

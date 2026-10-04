@@ -1,4 +1,4 @@
-<?xml version="2.0"?>
+<?xml version="1.0"?>
 <package format="3">
   <name>human_model</name>
   <version>0.0.0</version>
@@ -6,7 +6,7 @@
 
 
   <maintainer email="manuel.beschi@unibs.it">Manuel Beschi</maintainer>
- 
+
   <license>BSD</license>
 
   <url type="website">https://github.com/JRL-CARI-CNR-UNIBS/human_model</url>
@@ -15,8 +15,14 @@
 
   <buildtool_depend>cmake</buildtool_depend>
 
-  
-  <depend>rdyn_core</depend>
+  <depend>eigen</depend>
+  <build_depend>pybind11-dev</build_depend>
+  <build_depend>python3-dev</build_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <test_depend>gtest</test_depend>
+
   <export>
+    <build_type>cmake</build_type>
   </export>
 </package>

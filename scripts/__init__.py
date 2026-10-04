@@ -1,2 +1,3 @@
 # scripts/__init__.py
-from .human_process_model import *
+# The JAX model (human_kinematic_model_jax) is not imported here, so that jax stays an optional dependency
+from .human_kinematic_model import *

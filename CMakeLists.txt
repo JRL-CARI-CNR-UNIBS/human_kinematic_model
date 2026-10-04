@@ -83,6 +83,14 @@ if(ENABLE_TESTING)
     PROJECT_SRC_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}"
   )
   cnr_target_compile_options(human_model_test)
+
+  # Speed test of the fk -> ik -> fk loop (no gtest, no prints)
+  add_executable(human_model_benchmark test/benchmark_fk_ik.cpp)
+  target_link_libraries(human_model_benchmark
+    PUBLIC
+    human_model::human_model
+  )
+  cnr_target_compile_options(human_model_benchmark)
 endif()
 
 # Python bindings
@@ -125,7 +133,7 @@ install(
 # Install the test
 if(ENABLE_TESTING)
   install(
-    TARGETS human_model_test
+    TARGETS human_model_test human_model_benchmark
     EXPORT human_modelTargets
     RUNTIME DESTINATION bin/human_model
   )

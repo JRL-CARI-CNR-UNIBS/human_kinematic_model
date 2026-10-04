@@ -111,7 +111,8 @@ def test_kinematics():
         kp_in_ext = Keypoints()
         kp_in_ext.set_keypoints(kpts)
 
-        q2, param2 = model.inverse_kinematics(kp_in_ext, qbounds)
+        # Call inverse kinematics using q as previous configuration
+        q2, param2, chest_q_rotated = model.inverse_kinematics(kp_in_ext, qbounds, q)
 
         print("\nq2 [before fk]:        \n", q2)
         print("\ndiff q [before fk]:    \n", (q-q2))

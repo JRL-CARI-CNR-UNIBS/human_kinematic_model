@@ -114,6 +114,81 @@ class JointLimits:
         self.max = max
 
 
+# Quaternion helpers with the same conventions and algorithms as Eigen: quaternions are (x, y, z, w)
+
+
+def quat_to_rotmat(quat):
+    """Rotation matrix of a quaternion (x, y, z, w), as Eigen::Quaterniond::toRotationMatrix().
+
+    The quaternion is not normalized here: use normalize_quat first for non-unit quaternions.
+    """
+    x, y, z, w = quat
+    tx, ty, tz = 2 * x, 2 * y, 2 * z
+    twx, twy, twz = tx * w, ty * w, tz * w
+    txx, txy, txz = tx * x, ty * x, tz * x
+    tyy, tyz, tzz = ty * y, tz * y, tz * z
+    return np.array([[1 - (tyy + tzz), txy - twz, txz + twy],
+                     [txy + twz, 1 - (txx + tzz), tyz - twx],
+                     [txz - twy, tyz + twx, 1 - (txx + tyy)]])
+
+
+def normalize_quat(quat):
+    """Normalized quaternion, as Eigen::Quaterniond::normalize(): a zero quaternion is left unchanged."""
+    quat = np.asarray(quat, dtype=float)
+    squared_norm = np.dot(quat, quat)
+    return quat / np.sqrt(squared_norm) if squared_norm > 0 else quat
+
+
+def rotmat_to_quat(mat):
+    """Quaternion (x, y, z, w) of a rotation matrix, as Eigen::Quaterniond(Matrix3d) (Shoemake's algorithm)."""
+    quat = np.zeros(4)
+    t = np.trace(mat)
+    if t > 0:
+        t = np.sqrt(t + 1.0)
+        quat[3] = 0.5 * t
+        t = 0.5 / t
+        quat[0] = (mat[2, 1] - mat[1, 2]) * t
+        quat[1] = (mat[0, 2] - mat[2, 0]) * t
+        quat[2] = (mat[1, 0] - mat[0, 1]) * t
+    else:
+        i = 0
+        if mat[1, 1] > mat[0, 0]:
+            i = 1
+        if mat[2, 2] > mat[i, i]:
+            i = 2
+        j = (i + 1) % 3
+        k = (j + 1) % 3
+        t = np.sqrt(mat[i, i] - mat[j, j] - mat[k, k] + 1.0)
+        quat[i] = 0.5 * t
+        t = 0.5 / t
+        quat[3] = (mat[k, j] - mat[j, k]) * t
+        quat[j] = (mat[j, i] + mat[i, j]) * t
+        quat[k] = (mat[k, i] + mat[i, k]) * t
+    return quat
+
+
+def quat_multiply(a, b):
+    """Hamilton product a * b of quaternions (x, y, z, w)."""
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return np.array([aw * bx + ax * bw + ay * bz - az * by,
+                     aw * by + ay * bw + az * bx - ax * bz,
+                     aw * bz + az * bw + ax * by - ay * bx,
+                     aw * bw - ax * bx - ay * by - az * bz])
+
+
+def canonical_quat(quat):
+    """Quaternion with a non-negative scalar part (consistent representation used by the model)."""
+    return -quat if quat[3] < 0 else quat
+
+
+def chest_quat_rotated(chest_q):
+    """Chest quaternion rotated by 180 deg about its z axis (Human28DOF::chestQuatRotated)."""
+    half_angle = 0.5 * np.pi
+    return canonical_quat(quat_multiply(chest_q, np.array([0.0, 0.0, np.sin(half_angle), np.cos(half_angle)])))
+
+
+
 class HumanProcess:
     def __init__(self, n_dof=28, n_params=8, n_keypoints=13, sampling_time=0.01):
         self.dt = sampling_time
@@ -174,9 +249,9 @@ class HumanProcess:
         hip_distance = param[2]
 
         # Transformation matrix from external frame to chest frame
-        chest_q = R.from_quat(q[3:7])
+        # (the quaternion is normalized as in the C++ code; a zero quaternion is left unchanged)
         T_ext_chest = np.eye(4)
-        T_ext_chest[:3, :3] = chest_q.as_matrix()
+        T_ext_chest[:3, :3] = quat_to_rotmat(normalize_quat(q[3:7]))
         T_ext_chest[:3, 3] = q[:3]
 
         # Transformation matrix from chest frame to shoulder frame
@@ -371,166 +446,229 @@ class HumanProcess:
         return keypoints
 
 
-    def right_limb_ik(self, elbow_in_limb, wrist_in_limb, param, qarm_bounds: list[JointLimits]):
-        qarm = np.zeros(4)
+    # =======================================================================
+    # Inverse kinematics: same algorithm as Human28DOF (src/human_model/human_model.cpp)
+    # =======================================================================
 
-        q3min = qarm_bounds[0].min # shoulder rot y lower bound
-        q3max = qarm_bounds[0].max # shoulder rot y upper bound
-        
-        q1 = np.arctan2(-elbow_in_limb[0], elbow_in_limb[1])
-        if np.abs(np.sin(q1)) > 0.5:
-            q2 = np.arctan2(elbow_in_limb[2], -elbow_in_limb[0] / np.sin(q1))
-        else:
-            q2 = np.arctan2(elbow_in_limb[2], elbow_in_limb[1] / np.cos(q1))
-        
-        rot01 = R.from_rotvec(q1 * np.array([0, 0, 1]))
-        rot12 = R.from_rotvec(q2 * np.array([1, 0, 0]))
-        
-        T01 = rot01.as_matrix()
-        T12 = rot12.as_matrix()
-        
-        T02 = T01 @ T12
-        
-        wrist_in_2 = np.linalg.inv(T02) @ wrist_in_limb
+    @staticmethod
+    def _in_bounds(x, limits: JointLimits):
+        # strict bounds, False for NaN (as in the C++ code)
+        return limits.min < x < limits.max
 
-        q3a = np.arctan2(wrist_in_2[2], -wrist_in_2[0])
-        q3b = np.arctan2(-wrist_in_2[2], wrist_in_2[0])
 
-        # Select the solution with the shoulder rot y within the limits
-        if q3a > q3min and q3a < q3max:
-            q3 = q3a
-        elif q3b > q3min and q3b < q3max:
-            q3 = q3b
+    @staticmethod
+    def _div_sin_or_cos(num_if_sin, num_if_cos, angle):
+        # num_if_sin / sin(angle) if |sin(angle)| > 0.5, else num_if_cos / cos(angle)
+        if np.abs(np.sin(angle)) > 0.5:
+            return num_if_sin / np.sin(angle)
+        return num_if_cos / np.cos(angle)
+
+
+    def _shoulder_ik(self, elbow_in_limb, qshoulder_bounds: list[JointLimits], first_solution: bool):
+        """Shoulder rot z and rot x (Human28DOF::shoulderIk). Returns (q (2,), valid), q is NaN if not valid."""
+        e = elbow_in_limb
+        if first_solution:
+            # Solution 1: hypothesis -pi/2 < q2 < pi/2 (cos(q2) > 0)
+            q1 = np.arctan2(-e[0], e[1])
         else:
-            raise ValueError("No solution for the shoulder rot y within the limits.")
-        
-        if np.abs(np.sin(q3)) > 0.5:
-            q6sinq5 = wrist_in_2[2] / np.sin(q3)
+            # Solution 2: hypothesis -pi < q2 < -pi/2 or pi/2 < q2 < pi (cos(q2) < 0)
+            q1 = np.arctan2(e[0], -e[1])
+        q2 = np.arctan2(e[2], self._div_sin_or_cos(-e[0], e[1], q1))
+
+        valid = self._in_bounds(q1, qshoulder_bounds[0]) and self._in_bounds(q2, qshoulder_bounds[1])
+        valid = valid and ((np.cos(q2) > 0) if first_solution else (np.cos(q2) < 0))
+
+        q = np.array([q1, q2]) if valid else np.full(2, np.nan)
+        return q, valid
+
+
+    def _elbow_ik(self, wrist_in_2, upper_arm_length, qelbow_bounds: list[JointLimits], first_solution: bool):
+        """Shoulder rot y and elbow rot z (Human28DOF::elbowIk). Returns (q (2,), valid), q is NaN if not valid."""
+        w = wrist_in_2
+        q6cosq5 = w[1] - upper_arm_length
+        if first_solution:
+            # Solution 1: hypothesis 0 < q5 < pi (sin(q5) > 0)
+            q3 = np.arctan2(w[2], -w[0])
         else:
-            q6sinq5 = -wrist_in_2[0] / np.cos(q3)
-        
-        q6cosq5 = wrist_in_2[1] - param[0]
-        
-        q5 = np.arctan2(q6sinq5, q6cosq5)
-        
-        qarm[0] = q1
-        qarm[1] = q2
-        qarm[2] = q3
-        qarm[3] = q5
-        
+            # Solution 2: hypothesis -pi < q5 < 0 (sin(q5) < 0)
+            q3 = np.arctan2(-w[2], w[0])
+        q5 = np.arctan2(self._div_sin_or_cos(w[2], -w[0], q3), q6cosq5)
+
+        valid = self._in_bounds(q3, qelbow_bounds[0]) and self._in_bounds(q5, qelbow_bounds[1])
+        valid = valid and ((np.sin(q5) > 0) if first_solution else (np.sin(q5) < 0))
+
+        q = np.array([q3, q5]) if valid else np.full(2, np.nan)
+        return q, valid
+
+
+    @staticmethod
+    def _wrist_in_2(qshoulder, wrist_in_limb):
+        """Wrist position in the frame after shoulder rot z and rot x (Human28DOF::computeWristIn2)."""
+        T02 = R.from_euler('z', qshoulder[0]).as_matrix() @ R.from_euler('x', qshoulder[1]).as_matrix()
+        return np.linalg.inv(T02) @ wrist_in_limb
+
+
+    def right_limb_ik(self, elbow_in_limb, wrist_in_limb, param, qarm_bounds: list[JointLimits], qarm_previous):
+        """Closed-form limb IK (Human28DOF::rightLimbIk).
+
+        Up to four solutions are computed (2 for the shoulder x 2 for the elbow); among the ones
+        within the joint limits, the closest to qarm_previous is returned (NaN if none is valid).
+        qarm_bounds are the limits of (shoulder rot z, shoulder rot x, shoulder rot y, elbow rot z).
+        """
+        q_shoulder_bounds = qarm_bounds[0:2]
+        q_elbow_bounds = qarm_bounds[2:4]
+
+        q_distance = np.inf
+        qarm = np.full(4, np.nan)
+        for first_shoulder in (True, False):
+            q_shoulder, valid_shoulder = self._shoulder_ik(elbow_in_limb, q_shoulder_bounds, first_shoulder)
+            wrist_in_2 = self._wrist_in_2(q_shoulder, wrist_in_limb)
+            for first_elbow in (True, False):
+                q_elbow, valid_elbow = self._elbow_ik(wrist_in_2, param[0], q_elbow_bounds, first_elbow)
+                if valid_shoulder and valid_elbow:
+                    # Human28DOF::updateIfCloser: replace only if strictly closer
+                    qarm_temp = np.concatenate([q_shoulder, q_elbow])
+                    q_distance_temp = np.linalg.norm(qarm_temp - qarm_previous)
+                    if q_distance_temp < q_distance:
+                        qarm = qarm_temp
+                        q_distance = q_distance_temp
+
         return qarm
 
 
-    def left_limb_ik(self, elbow_in_limb, wrist_in_limb, param, qarm_bounds: list[JointLimits]):
-        mirror_elbow_in_limb = elbow_in_limb.copy()
-        mirror_wrist_in_limb = wrist_in_limb.copy()
+    def left_limb_ik(self, elbow_in_limb, wrist_in_limb, param, qarm_bounds: list[JointLimits], qarm_previous):
+        mirror_elbow_in_limb = np.array(elbow_in_limb, dtype=float)
+        mirror_wrist_in_limb = np.array(wrist_in_limb, dtype=float)
         mirror_elbow_in_limb[2] *= -1.0
         mirror_wrist_in_limb[2] *= -1.0
-        return self.right_limb_ik(mirror_elbow_in_limb, mirror_wrist_in_limb, param, qarm_bounds) 
+        return self.right_limb_ik(mirror_elbow_in_limb, mirror_wrist_in_limb, param, qarm_bounds, qarm_previous)
 
 
-    def trunk_ik(self, measures_in_ext: Keypoints):
+    def trunk_ik(self, measures_in_ext: Keypoints, qtrunk_bounds: list[JointLimits]):
+        """Trunk IK (Human28DOF::trunkIk).
+
+        qtrunk_bounds are the limits of (shoulder rot x, hip rot z, hip rot x).
+        Returns q_trunk (10,), param_trunk (3,), chest_q_rotated (4,).
+        If the shoulder rotation is out of bounds (the bounds themselves are allowed), it is NaN
+        (and so are both arms in inverse_kinematics), as for the other invalid solutions.
+        """
         q = np.zeros(10)
         param = np.zeros(3)
 
-        upper_chest = 0.5 * (measures_in_ext.left_shoulder + measures_in_ext.right_shoulder)
-        lower_chest = 0.5 * (measures_in_ext.left_hip + measures_in_ext.right_hip)
-        hip_versor_in_ext = (measures_in_ext.left_hip - measures_in_ext.right_hip) / \
-            np.linalg.norm(measures_in_ext.left_hip - measures_in_ext.right_hip)
-        chest_z_in_ext = (upper_chest - lower_chest) / np.linalg.norm(upper_chest - lower_chest)  
+        # Compute the versors of the shoulders and the hips
         shoulder_versor_in_ext = (measures_in_ext.left_shoulder - measures_in_ext.right_shoulder) / \
             np.linalg.norm(measures_in_ext.left_shoulder - measures_in_ext.right_shoulder)
+        hip_versor_in_ext = (measures_in_ext.left_hip - measures_in_ext.right_hip) / \
+            np.linalg.norm(measures_in_ext.left_hip - measures_in_ext.right_hip)
 
-        shoulder_distance = np.linalg.norm(measures_in_ext.left_shoulder - measures_in_ext.right_shoulder)
-        chest_hip_distance = np.linalg.norm(upper_chest - lower_chest)
-        hip_distance = np.linalg.norm(measures_in_ext.left_hip - measures_in_ext.right_hip)
+        # Compute the chest reference frame Z
+        upper_chest = 0.5 * (measures_in_ext.left_shoulder + measures_in_ext.right_shoulder)
+        lower_chest = 0.5 * (measures_in_ext.left_hip + measures_in_ext.right_hip)
+        chest_z_in_ext = (upper_chest - lower_chest) / np.linalg.norm(upper_chest - lower_chest)
 
+        # Compute the distances between the shoulders and the hips
+        param[0] = np.linalg.norm(measures_in_ext.left_shoulder - measures_in_ext.right_shoulder)  # shoulder distance
+        param[1] = np.linalg.norm(upper_chest - lower_chest)                                     # chest-hip distance
+        param[2] = np.linalg.norm(measures_in_ext.left_hip - measures_in_ext.right_hip)          # hip distance
+
+        # Chest reference frame: x frontal, y right to left shoulder, z lower to upper chest
         chest_y_in_ext = shoulder_versor_in_ext - np.dot(shoulder_versor_in_ext, chest_z_in_ext) * chest_z_in_ext
         chest_y_in_ext /= np.linalg.norm(chest_y_in_ext)
-
         chest_x_in_ext = np.cross(chest_y_in_ext, chest_z_in_ext)
-
         chest_rot = np.column_stack((chest_x_in_ext, chest_y_in_ext, chest_z_in_ext))
-        chest_q = R.from_matrix(chest_rot).as_quat() # type: ignore
-        
-        # If the scalar part of the quaternion is negative,
-        # multiply by -1 to ensure consistent representation
-        if chest_q[3] < 0:
-            chest_q *= -1
 
+        # Convert to quaternion, with a non-negative scalar part for a consistent representation
+        chest_q = canonical_quat(rotmat_to_quat(chest_rot))
+        chest_q_rotated = chest_quat_rotated(chest_q)
 
-        T_ext_chest = np.eye(4)
-        T_ext_chest[:3, :3] = chest_rot
-        T_ext_chest[:3, 3] = upper_chest
+        # The chest frame is rebuilt from the quaternion, as in the C++ code
+        R_ext_chest = quat_to_rotmat(chest_q)
 
         q[:3] = upper_chest
         q[3:7] = chest_q
 
-        shoulder_versor_in_chest = np.linalg.inv(T_ext_chest[:3, :3]) @ shoulder_versor_in_ext
+        # Shoulder rotation is the rotation around chest_x_in_ext (frontal direction)
+        shoulder_versor_in_chest = np.linalg.inv(R_ext_chest) @ shoulder_versor_in_ext
         shoulder_rotx = np.arctan2(shoulder_versor_in_chest[2], shoulder_versor_in_chest[1])
+        if shoulder_rotx < qtrunk_bounds[0].min or shoulder_rotx > qtrunk_bounds[0].max:
+            shoulder_rotx = np.nan
 
-        hip_versor_in_chest = np.linalg.inv(T_ext_chest[:3, :3]) @ hip_versor_in_ext
-        hip_rotz = np.arctan2(-hip_versor_in_chest[0], hip_versor_in_chest[1])
+        # Hip rot z and hip rot x
+        h = np.linalg.inv(R_ext_chest) @ hip_versor_in_ext
 
-        if np.abs(np.sin(hip_rotz)) > 0.5:
-            cosq2 = -hip_versor_in_chest[0] / np.sin(hip_rotz)
-        else:
-            cosq2 = hip_versor_in_chest[1] / np.cos(hip_rotz)
+        # Solution 1: hypothesis -pi/2 < hip_rotx < pi/2 (cos(hip_rotx) > 0)
+        hip_rotz = np.arctan2(-h[0], h[1])
+        hip_rotx = np.arctan2(h[2], self._div_sin_or_cos(-h[0], h[1], hip_rotz))
+        valid = (np.cos(hip_rotx) > 0
+                 and self._in_bounds(hip_rotz, qtrunk_bounds[1]) and self._in_bounds(hip_rotx, qtrunk_bounds[2]))
 
-        hip_rotx = np.arctan2(hip_versor_in_chest[2], cosq2)
+        if not valid:
+            # Solution 2: hypothesis -pi < hip_rotx < -pi/2 or pi/2 < hip_rotx < pi (cos(hip_rotx) < 0)
+            hip_rotz = np.arctan2(h[0], -h[1])
+            hip_rotx = np.arctan2(h[2], self._div_sin_or_cos(-h[0], h[1], hip_rotz))
+            valid = (np.cos(hip_rotx) < 0
+                     and self._in_bounds(hip_rotz, qtrunk_bounds[1]) and self._in_bounds(hip_rotx, qtrunk_bounds[2]))
 
         q[7] = shoulder_rotx
-        q[8] = hip_rotz
-        q[9] = hip_rotx
+        q[8] = hip_rotz if valid else np.nan
+        q[9] = hip_rotx if valid else np.nan
 
-        param[0] = shoulder_distance
-        param[1] = chest_hip_distance
-        param[2] = hip_distance
+        return q, param, chest_q_rotated
 
-        return q, param
-    
 
-    def head_ik(self, measures_in_ext: Keypoints, T_ext_chest):
-        param = np.zeros(1)
-        q = np.zeros(2)
-
-        # Express head_in_ext in homogeneous coordinates
+    def head_ik(self, measures_in_ext: Keypoints, T_ext_chest, qhead_bounds: list[JointLimits]):
+        """Head IK (Human28DOF::headIk). qhead_bounds are the limits of (head rot x, head rot y).
+        Returns q_head (2,), param_head (1,)."""
+        # Express head_in_ext in homogeneous coordinates, compute head_in_chest and remove the homogeneous coordinate
         head_in_ext = np.concatenate([measures_in_ext.head, np.array([1])])
-
-        # Compute head_in_chest and remove the homogeneous coordinate
         head_in_chest = (np.linalg.inv(T_ext_chest) @ head_in_ext)[:-1]
 
-        param[0] = np.linalg.norm(head_in_chest)
+        param = np.array([np.linalg.norm(head_in_chest)])
 
+        # Solution 1: hypothesis cos(q2) > 0
         q1 = np.arctan2(-head_in_chest[1], head_in_chest[2])
-        if np.abs(np.sin(q1)) > 0.5:
-            dcosq2 = -head_in_chest[1] / np.sin(q1)
-        else:
-            dcosq2 = head_in_chest[2] / np.cos(q1)
+        q2 = np.arctan2(head_in_chest[0], self._div_sin_or_cos(-head_in_chest[1], head_in_chest[2], q1))
+        valid = (np.cos(q2) > 0
+                 and self._in_bounds(q1, qhead_bounds[0]) and self._in_bounds(q2, qhead_bounds[1]))
 
-        q2 = np.arctan2(head_in_chest[0], dcosq2)
+        if not valid:
+            # Solution 2: hypothesis cos(q2) < 0
+            q1 = np.arctan2(head_in_chest[1], -head_in_chest[2])
+            q2 = np.arctan2(head_in_chest[0], self._div_sin_or_cos(-head_in_chest[1], head_in_chest[2], q1))
+            valid = (np.cos(q2) < 0
+                     and self._in_bounds(q1, qhead_bounds[0]) and self._in_bounds(q2, qhead_bounds[1]))
 
-        q[0] = q1
-        q[1] = q2
-
+        q = np.array([q1, q2]) if valid else np.full(2, np.nan)
         return q, param
 
 
-    def inverse_kinematics(self, measures_in_ext: Keypoints, qbounds: list[JointLimits]):
+    def inverse_kinematics(self, measures_in_ext: Keypoints, qbounds: list[JointLimits], q_previous):
+        """Inverse kinematics (Human28DOF::ik).
+
+        Args:
+            measures_in_ext: keypoints in the external frame
+            qbounds: 28 joint limits (see Human28DOF::setDefaultJointLimits)
+            q_previous: (28,) previous configuration, used to choose among multiple limb solutions
+
+        Returns:
+            configuration (28,), param (8,), chest_q_rotated (4,)
+        """
         # 7 dof for chest (tra+quat)
         # 1 dof: shoulder rotation is the rotation around chest_x_in_ext (frontal direction)
         # 1 dof for trunk rotation (around chest_z)
         # 1 dof: hip rotation is the rotation around chest_x_in_ext (frontal direction)
         # 3 dof translation= shoulder_distance, chest_hip_distance, hip_distance
         # 6 dof for each limb: 3 dof shoulder, 1 dof length of the upper arm, 1 dof elbow rotation, 1 dof length of the lower arm
-        q_trunk, trunk_param = self.trunk_ik(measures_in_ext)
+        q_previous = np.asarray(q_previous, dtype=float)
+
+        q_trunk, trunk_param, chest_q_rotated = self.trunk_ik(measures_in_ext, qbounds[7:10])
 
         T_ext_rshoulder, T_ext_lshoulder, \
         T_ext_rhip, T_ext_lhip, \
         T_ext_chest = \
             self.trunk_fk(q_trunk, trunk_param)
 
-        q_head, head_param = self.head_ik(measures_in_ext, T_ext_chest)
+        q_head, head_param = self.head_ik(measures_in_ext, T_ext_chest, qbounds[26:28])
 
         upper_arm_length = 0.5 * (
             np.linalg.norm(measures_in_ext.right_elbow - measures_in_ext.right_shoulder) +
@@ -555,45 +693,29 @@ class HumanProcess:
         arm_param = np.array([upper_arm_length, lower_arm_length])
         leg_param = np.array([upper_leg_length, lower_leg_length])
 
-        q_arm_bounds = qbounds[10:13]
-        q_leg_bounds = qbounds[18:21]
+        def in_frame(T, point):
+            return (np.linalg.inv(T) @ np.concatenate([point, np.array([1])]))[:-1]
 
-        relbow_in_ext = np.concatenate([measures_in_ext.right_elbow, np.array([1])])
-        relbow_in_rshoulder = np.linalg.inv(T_ext_rshoulder) @ relbow_in_ext
+        q_right_arm = self.right_limb_ik(in_frame(T_ext_rshoulder, measures_in_ext.right_elbow),
+                                         in_frame(T_ext_rshoulder, measures_in_ext.right_wrist),
+                                         arm_param, qbounds[10:14], q_previous[10:14])
+        q_left_arm = self.left_limb_ik(in_frame(T_ext_lshoulder, measures_in_ext.left_elbow),
+                                       in_frame(T_ext_lshoulder, measures_in_ext.left_wrist),
+                                       arm_param, qbounds[14:18], q_previous[14:18])
 
-        rwrist_in_ext = np.concatenate([measures_in_ext.right_wrist, np.array([1])])
-        rwrist_in_rshoulder = np.linalg.inv(T_ext_rshoulder) @ rwrist_in_ext
-
-        lelbow_in_ext = np.concatenate([measures_in_ext.left_elbow, np.array([1])])
-        lelbow_in_lshoulder = np.linalg.inv(T_ext_lshoulder) @ lelbow_in_ext
-
-        lwrist_in_ext = np.concatenate([measures_in_ext.left_wrist, np.array([1])])
-        lwrist_in_lshoulder = np.linalg.inv(T_ext_lshoulder) @ lwrist_in_ext
-
-        q_right_arm = self.right_limb_ik(relbow_in_rshoulder[:-1], rwrist_in_rshoulder[:-1], arm_param, q_arm_bounds)
-        q_left_arm = self.left_limb_ik(lelbow_in_lshoulder[:-1], lwrist_in_lshoulder[:-1], arm_param, q_arm_bounds)
-
-        rknee_in_ext = np.concatenate([measures_in_ext.right_knee, np.array([1])])
-        rknee_in_rhip = np.linalg.inv(T_ext_rhip) @ rknee_in_ext
-
-        rankle_in_ext = np.concatenate([measures_in_ext.right_ankle, np.array([1])])
-        rankle_in_rhip = np.linalg.inv(T_ext_rhip) @ rankle_in_ext
-
-        lknee_in_ext = np.concatenate([measures_in_ext.left_knee, np.array([1])])
-        lknee_in_lhip = np.linalg.inv(T_ext_lhip) @ lknee_in_ext
-
-        lankle_in_ext = np.concatenate([measures_in_ext.left_ankle, np.array([1])])
-        lankle_in_lhip = np.linalg.inv(T_ext_lhip) @ lankle_in_ext
-
-        q_right_leg = self.right_limb_ik(rknee_in_rhip[:-1], rankle_in_rhip[:-1], leg_param, q_leg_bounds)
-        q_left_leg = self.left_limb_ik(lknee_in_lhip[:-1], lankle_in_lhip[:-1], leg_param, q_leg_bounds)
+        q_right_leg = self.right_limb_ik(in_frame(T_ext_rhip, measures_in_ext.right_knee),
+                                         in_frame(T_ext_rhip, measures_in_ext.right_ankle),
+                                         leg_param, qbounds[18:22], q_previous[18:22])
+        q_left_leg = self.left_limb_ik(in_frame(T_ext_lhip, measures_in_ext.left_knee),
+                                       in_frame(T_ext_lhip, measures_in_ext.left_ankle),
+                                       leg_param, qbounds[22:26], q_previous[22:26])
 
         configuration = np.concatenate([q_trunk, q_right_arm, q_left_arm,
                                         q_right_leg, q_left_leg, q_head])
         param = np.concatenate([trunk_param, arm_param, leg_param, head_param])
 
-        return configuration, param
-    
+        return configuration, param, chest_q_rotated
+
 
     def print(self, q, param):
         q_trunk = q[0:10]
