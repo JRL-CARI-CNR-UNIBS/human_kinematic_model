@@ -46,39 +46,100 @@ precision):
   hip or head gives NaN angles. A shoulder rotation outside its limits gives NaN `q[7]`, and therefore NaN for both
   arms, while the rest of the IK is still computed.
 
-## Prerequisites
+## Installation
 
-1. System dependencies (the rosdep keys are in `package.xml`):
+Choose the part you need:
+
+| Use | What to install | Section |
+|---|---|---|
+| JAX model or python translation (e.g. from `prophet-ioc`) | Python packages, plus a `.pth` file (no build) | [A](#a-python-and-jax-model) |
+| Python bindings of the C++ class, for one Python environment | Eigen, pybind11, one compiler command | [B](#b-python-bindings-for-a-given-environment-without-cmake) |
+| C++ library, bindings and tests in a ROS 2 / colcon workspace | apt packages, colcon | [C](#c-c-library-with-colcon) |
+
+> **Always install with `python -m pip`, not `pip`.** `python -m pip` installs into the environment of the `python`
+> you run; a bare `pip` can belong to another environment (an alias, `~/.local/bin/pip`, conda) even when the venv is
+> active. The packages then land elsewhere and imports fail with `ModuleNotFoundError`. Check with `which python` and
+> `python -m pip --version`: both must point into your environment.
+
+### A. Python and JAX model
+
+The JAX model (`scripts/human_kinematic_model_jax.py`) and the python translation (`scripts/human_kinematic_model.py`)
+are plain scripts, not a pip package: nothing to build.
+
+1. **Environment.** Python >= 3.10 (tested with 3.14). Use an existing virtualenv, e.g. the `prophet-ioc` one
+   (`../prophet-ioc/.venv`, whose `pip install -e ".[cuda,dev]"` already installs these dependencies), or create one:
     ```sh
-    sudo apt install libeigen3-dev   # C++ library
-    sudo apt install libgtest-dev    # C++ tests
-    sudo apt install pybind11-dev    # Python bindings (or pip/conda install pybind11 in your environment)
+    python3 -m venv --upgrade-deps .venv
+    source .venv/bin/activate
     ```
-2. Python dependencies (python translation, JAX model, tests, binding build), in the environment where you will use them:
+2. **Dependencies** (numpy, scipy, jax, pybind11, pytest, sympy):
     ```sh
-    pip install -r requirements.txt
+    python -m pip install -r requirements.txt
     ```
-    For the JAX model on an NVIDIA GPU, install the CUDA build of JAX, e.g. `pip install -U "jax[cuda13]"`.
+    On an NVIDIA GPU, install the CUDA build of JAX instead of the CPU one. It must match the driver
+    (`nvidia-smi`, top right):
+    ```sh
+    python -m pip install -U "jax[cuda13]"   # driver >= 580 (CUDA 13)
+    python -m pip install -U "jax[cuda12]"   # driver >= 525 (CUDA 12)
+    ```
+3. **Make the scripts importable** (`import human_kinematic_model_jax`): a `.pth` file in the environment's
+   `site-packages` adds `scripts/` to `sys.path`. Run from this repository, with the environment active:
+    ```sh
+    realpath scripts > "$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')/human_kinematic_model.pth"
+    ```
+    Use an absolute path (`realpath`): a relative one is resolved against `site-packages`. Moving this repository
+    requires rewriting the file.
+4. **Check:**
+    ```sh
+    python -c "import jax, human_kinematic_model_jax as hkm; print(hkm.fk(jax.numpy.zeros(28), jax.numpy.ones(8)).shape, jax.devices())"
+    ```
+    It should print `(13, 3)` and, with the CUDA build, a `CudaDevice`.
 
-## Installation (using colcon)
+The tests (`test/python/conftest.py`) put `scripts/` on `sys.path` themselves and do not need step 3.
 
-1. **Create a workspace**:
+### B. Python bindings for a given environment (without CMake)
+
+The binding `human_model_binding` (used by the equivalence tests and by the python code that calls the C++ class)
+must be compiled for the Python version that imports it. Without CMake and without installing anything, compile it
+into the git-ignored `build/` folder; the Python tests look for it in `build/python/`, or in `$HUMAN_MODEL_BINDING_DIR`.
+
+1. System dependencies:
+    ```sh
+    sudo apt install g++ libeigen3-dev   # libgtest-dev too for the C++ test below
+    ```
+    pybind11 comes from `requirements.txt` (section A, step 2).
+2. Build, with `PY` the environment's interpreter:
+    ```sh
+    PY=/path/to/env/bin/python   # e.g. ../prophet-ioc/.venv/bin/python
+    mkdir -p build/python
+    c++ -O3 -DNDEBUG -shared -std=c++17 -fPIC $($PY -m pybind11 --includes) -I include -I /usr/include/eigen3 \
+        src/human_model/human_model.cpp src/human_model/bindings.cpp \
+        -o build/python/human_model_binding$($PY -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
+    ```
+    To import it outside the tests, add `build/python` to `sys.path` (or a second `.pth` file as in A.3).
+3. The native benchmark and the gtest can be built in the same way:
+    ```sh
+    c++ -O3 -DNDEBUG -std=c++17 -I include -I /usr/include/eigen3 \
+        src/human_model/human_model.cpp test/benchmark_fk_ik.cpp -o build/benchmark_fk_ik
+    c++ -O3 -DNDEBUG -std=c++17 -DPROJECT_SRC_DIRECTORY=\"$PWD\" -I include -I /usr/include/eigen3 \
+        src/human_model/human_model.cpp test/test_fk_ik.cpp -o build/human_model_test -lgtest -lpthread
+    ```
+Rebuild after any change to the C++ sources.
+
+### C. C++ library with colcon
+
+1. **System dependencies** (the rosdep keys are in `package.xml`):
+    ```sh
+    sudo apt install libeigen3-dev libgtest-dev pybind11-dev
+    ```
+2. **Create a workspace and clone the repository:**
     ```sh
     mkdir -p ~/projects/ws/src
     cd ~/projects/ws/src
-    ```
-
-2. **Clone the repository**:
-    ```sh
     git clone https://github.com/JRL-CARI-CNR-UNIBS/human_kinematic_model.git
-    ```
-
-3. **Navigate back to the workspace folder**:
-    ```sh
     cd ../..
     ```
-
-4. **Build the package**:
+3. **Build the package:**
     ```sh
     colcon build --symlink-install --continue-on-error --packages-select human_model
     ```
@@ -87,40 +148,23 @@ precision):
 
     > **Note:** CMake runs `pip install -e` on the repository while *configuring*, with the Python found by CMake
     > (the active virtualenv or conda environment if there is one, otherwise `--user`). Activate the environment you
-    > want the package installed in before building.
-
-5. **Update the `.bashrc` file**:
-
-    _The following instructions apply only when performing a global installation of the package!_
-
-    Add the following lines to update the `PYTHONPATH` and `LD_LIBRARY_PATH`:
-
+    > want the package installed in before building. For a Python-only setup use section A instead.
+4. **Global installation only: update `.bashrc`.** Add the install folder to `PYTHONPATH` and `LD_LIBRARY_PATH`, so
+   that `human_model_binding` can be imported and finds `libhuman_model.so`:
     ```sh
     export PYTHONPATH="${PYTHONPATH}:${HOME}/projects/ws/install/human_model/lib/human_model/"
     export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${HOME}/projects/ws/install/human_model/lib/human_model/"
     ```
 
-    This will allow you to import the `human_model_binding` python module and let it find the C++ `libhuman_model.so` shared library.
+### Troubleshooting
 
-### Building the bindings for a specific Python environment (without CMake)
-
-The binding has to be compiled for the Python version that imports it. To build it quickly for a given environment
-(e.g. a virtualenv with JAX), without CMake and without installing anything, compile it into the git-ignored `build/`
-folder. The Python tests look for it in `build/python/`, or in `$HUMAN_MODEL_BINDING_DIR`.
-```sh
-PY=/path/to/env/bin/python   # needs pybind11 (pip install -r requirements.txt)
-mkdir -p build/python
-c++ -O3 -DNDEBUG -shared -std=c++17 -fPIC $($PY -m pybind11 --includes) -I include -I /usr/include/eigen3 \
-    src/human_model/human_model.cpp src/human_model/bindings.cpp \
-    -o build/python/human_model_binding$($PY -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
-```
-The native benchmark and the gtest can be built in the same way:
-```sh
-c++ -O3 -DNDEBUG -std=c++17 -I include -I /usr/include/eigen3 \
-    src/human_model/human_model.cpp test/benchmark_fk_ik.cpp -o build/benchmark_fk_ik
-c++ -O3 -DNDEBUG -std=c++17 -DPROJECT_SRC_DIRECTORY=\"$PWD\" -I include -I /usr/include/eigen3 \
-    src/human_model/human_model.cpp test/test_fk_ik.cpp -o build/human_model_test -lgtest -lpthread
-```
+| Symptom | Cause and fix |
+|---|---|
+| `ModuleNotFoundError` (jax, numpy, ...) right after installing | the packages went into another environment: reinstall with `python -m pip` (see the note above) |
+| `pip show <package>`: *Package(s) not found* | the installation failed: rerun it and read the end of its output, e.g. `python -m pip install -r requirements.txt 2>&1 \| tail -30` |
+| `No module named 'human_kinematic_model_jax'` | the `.pth` file is missing or points to an old path (A.3) |
+| `No module named 'human_model_binding'` | the binding is not built for this Python version (B), or not on `sys.path` |
+| `jax.devices()` shows only `CpuDevice` | CPU build of JAX installed, or CUDA build not matching the driver (A.2) |
 
 ## Usage
 
