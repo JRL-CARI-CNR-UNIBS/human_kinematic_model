@@ -28,14 +28,37 @@ option(BUILD_EXAMPLE            "COMPILE THE EXAMPLE" OFF)
 #############################
 ## DEPENDENCIES            ##
 #############################
-find_package(Eigen3 REQUIRED COMPONENTS Geometry)
+# SKBUILD is defined when pip builds the Python package (`python -m pip install .`, scikit-build-core, see
+# pyproject.toml): then only the Python package is built (binding with the library linked in, python modules), Eigen
+# is downloaded if the system has none, and nothing is installed outside the wheel.
+if(SKBUILD)
+  find_package(Eigen3 QUIET COMPONENTS Geometry)
+  if(NOT TARGET Eigen3::Eigen)
+    message(STATUS "Eigen3 not found: downloading Eigen 3.4.0 (headers only)")
+    include(FetchContent)
+    # SOURCE_SUBDIR without a CMakeLists.txt: download only, Eigen's own CMake project is not configured
+    FetchContent_Declare(eigen
+      URL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+      URL_HASH SHA256=8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72
+      SOURCE_SUBDIR no_cmake)
+    FetchContent_MakeAvailable(eigen)
+    add_library(Eigen3::Eigen INTERFACE IMPORTED)
+    set_target_properties(Eigen3::Eigen PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${eigen_SOURCE_DIR}")
+  endif()
+else()
+  find_package(Eigen3 REQUIRED COMPONENTS Geometry)
+endif()
 
 cnr_enable_testing(ENABLE_TESTING ENABLE_COVERAGE_TESTING USE_ROS1)
 
-find_package(Python REQUIRED COMPONENTS 
-             Interpreter  # for the installation of the python package
-             Development # for the c++ -> python bindings
-)
+if(SKBUILD)
+  find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+else()
+  find_package(Python REQUIRED COMPONENTS
+               Interpreter  # for the installation of the python package
+               Development # for the c++ -> python bindings
+  )
+endif()
 find_package(pybind11 REQUIRED CONFIG)
 
 # detect virtualenv and set Pip args accordingly
@@ -51,9 +74,14 @@ endif()
 #################
 ## Build       ##
 #################
-# Define the library
-add_library(human_model SHARED
-  src/human_model/human_model.cpp)
+# Define the library: shared for C++ users; static inside the Python package, so that the binding is self-contained
+if(SKBUILD)
+  add_library(human_model STATIC src/human_model/human_model.cpp)
+  set_target_properties(human_model PROPERTIES POSITION_INDEPENDENT_CODE ON)
+else()
+  add_library(human_model SHARED
+    src/human_model/human_model.cpp)
+endif()
 
 # Set the include directories
 target_include_directories(human_model PUBLIC
@@ -124,6 +152,14 @@ target_link_libraries(human_model_binding
 ### #############
 ### ## Install ##
 ### #############
+if(SKBUILD)
+  # Python package: the binding and the python modules at the top level of site-packages (import human_model_binding,
+  # human_kinematic_model, human_kinematic_model_jax); CMAKE_INSTALL_PREFIX is the wheel's platlib folder
+  install(TARGETS human_model_binding LIBRARY DESTINATION .)
+  install(FILES scripts/human_kinematic_model.py scripts/human_kinematic_model_jax.py DESTINATION .)
+  return()
+endif()
+
 # Install the include directory
 install(
   DIRECTORY include/human_model
@@ -174,7 +210,8 @@ install(FILES
   DESTINATION "share/human_model/cmake"
 )
 
-# Install the Python package in development mode (live changes)
+# Install the Python package in development mode (live changes); it builds the binding through scikit-build-core, with
+# SKBUILD defined, so this line is not reached again
 execute_process(COMMAND ${Python_EXECUTABLE} -m pip install ${_pip_args} -e ${CMAKE_CURRENT_LIST_DIR})
 
 # make uninstall

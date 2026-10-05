@@ -1,18 +1,38 @@
+# Python package of the human kinematic model: `python -m pip install .` (see README, Installation A) builds the
+# binding human_model_binding (C++ library linked in) and installs it with the python translation
+# (human_kinematic_model) and the JAX model (human_kinematic_model_jax). Needs a C++17 compiler; CMake, pybind11 and,
+# if the system has none, Eigen are fetched by the build.
+
 [build-system]
-requires = ["scikit-build-core", "pybind11"]
+requires = ["scikit-build-core >= 0.10", "pybind11 >= 2.10"]
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "human_model"
-version = "0.0.1"
-description = "A human model package"
+version = "0.1.0"
+description = "28-DOF human kinematic model: closed-form forward and inverse kinematics in C++ (Python bindings), numpy and JAX"
+readme = "README.md"
+requires-python = ">= 3.10"
 authors = [
     { name = "Michele Ferrari", email = "michele.ferrari@unibs.it" }
 ]
+dependencies = [
+    "numpy",
+    "scipy",   # python translation
+    "jax",     # JAX model (CPU build; GPU: the cuda12 / cuda13 extras)
+]
 
-# Tell scikit-build to use Unix Makefiles generator to avoid installing Ninja
-[tool.scikit-build.cmake]
-args = ["-GUnix Makefiles"]
+[project.optional-dependencies]
+cuda13 = ["jax[cuda13]"]   # NVIDIA driver >= 580
+cuda12 = ["jax[cuda12]"]   # NVIDIA driver >= 525
+test = ["pytest", "sympy"]
 
-# [tool.scikit-build] or [tool.setuptools.packages.find] tags are not needed 
-# because there’s no Python source package — only the compiled extension.
+[tool.scikit-build]
+cmake.version = ">= 3.16"
+# no Python package folder: the modules are installed by CMakeLists.txt (if(SKBUILD) ... install); without this,
+# scikit-build-core would package src/human_model (the C++ sources) as the Python package human_model
+wheel.packages = []
+sdist.exclude = ["build/", ".venv/", "test/python/__pycache__/"]
+
+[tool.scikit-build.cmake.define]
+ENABLE_TESTING = "OFF"   # gtest and the C++ benchmark are not part of the Python package

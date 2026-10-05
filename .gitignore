@@ -49,3 +49,6 @@ __pycache__/
 
 # python packaging files
 human_model.egg-info/
+
+# virtualenv of README, Installation A
+.venv/
