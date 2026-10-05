@@ -69,7 +69,10 @@ the C++ library linked in). Its dependencies (numpy, scipy, jax) are installed w
 
 Requirements: Python >= 3.10 (tested with 3.14) and a C++17 compiler (`sudo apt install g++` on Ubuntu). CMake,
 pybind11 and Eigen are fetched by the build when missing: Eigen 3.4.0 is downloaded if the system has none
-(`libeigen3-dev`).
+(`libeigen3-dev`). The binding also needs the Python development headers of the interpreter
+(`sudo apt install python3-dev`, or `python3.X-dev` for a Python other than the system default). Without them the
+package is installed without `human_model_binding` (a CMake warning, visible with `pip install -v`); the JAX model and
+the python translation do not need it. Install the headers and reinstall to add it.
 
 1. **Environment.** Activate the environment that should contain the package (virtualenv, conda, ...), or create a
    virtualenv:
@@ -92,9 +95,11 @@ pybind11 and Eigen are fetched by the build when missing: Eigen 3.4.0 is downloa
     ```
     It should print `(13, 3)` and, with a CUDA extra, a `CudaDevice`.
 
-**Developing the model.** The installed modules are copies, also with `pip install -e .`: after changing
-`scripts/` or the C++ sources, install again. The tests do not need the package: `test/python/conftest.py` imports
-the modules from `scripts/` and the binding from `build/python/` (section B) or from the installed package.
+**Developing the model.** Install it in editable mode, `python -m pip install -e .` (extras as above): the python
+modules are then imported from `scripts/` (a `.pth` file), so changes to them are live; the binding is compiled at
+installation, so install again after changing the C++ sources. A regular install copies the modules. The tests do not
+need the package: `test/python/conftest.py` imports the modules from `scripts/` and the binding from `build/python/`
+(section B) or from the installed package.
 
 ### B. Python bindings for a given environment (without CMake)
 
@@ -163,6 +168,7 @@ Rebuild after any change to the C++ sources.
 | `python -m pip show human_model`: *Package(s) not found* | the installation failed: rerun it and read the end of its output, e.g. `python -m pip install . 2>&1 \| tail -30` |
 | installation fails with `CMAKE_CXX_COMPILER not set` / `No CMAKE_CXX_COMPILER could be found` | no C++ compiler: `sudo apt install g++` |
 | installation fails while downloading Eigen | no network access to gitlab.com: install Eigen from the system (`sudo apt install libeigen3-dev`) |
+| `No module named 'human_model_binding'` after section A | the Python development headers were missing at installation: `sudo apt install python3-dev` (or `python3.X-dev`), then reinstall |
 | `No module named 'human_model_binding'` (tests, section B) | the binding is not built for this Python version, or not on `sys.path` |
 | `jax.devices()` shows only `CpuDevice` | CPU build of JAX installed, or CUDA build not matching the driver (A.2) |
 

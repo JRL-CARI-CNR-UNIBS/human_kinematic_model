@@ -25,6 +25,35 @@ option(BUILD_EXAMPLE            "COMPILE THE EXAMPLE" OFF)
 #############################
 
 
+# Python modules of the pip package (human_kinematic_model, human_kinematic_model_jax): copied into site-packages by
+# a regular install; an editable install (python -m pip install -e .) installs a .pth file that puts scripts/ on
+# sys.path instead, so that changes to the scripts are live without reinstalling
+macro(hkm_install_python_modules)
+  if(SKBUILD_STATE STREQUAL "editable")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/human_model_scripts.pth" "${CMAKE_CURRENT_SOURCE_DIR}/scripts\n")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/human_model_scripts.pth" DESTINATION .)
+  else()
+    install(FILES scripts/human_kinematic_model.py scripts/human_kinematic_model_jax.py DESTINATION .)
+  endif()
+endmacro()
+
+#############################
+## PYTHON PACKAGE WITHOUT THE BINDING ##
+#############################
+# `python -m pip install .` (scikit-build-core, SKBUILD defined) on a system without the Python development headers
+# (python3-dev / python3.X-dev): the binding cannot be compiled, but the JAX model and the python translation do not
+# need it, so the package is installed without it (a warning; reinstall after installing the headers to add it).
+# scikit-build-core passes the interpreter's include folder as Python_INCLUDE_DIR, which FindPython would use without
+# checking that it exists (an obscure "patchlevel.h cannot be read" error).
+if(SKBUILD AND NOT EXISTS "${Python_INCLUDE_DIR}/Python.h")
+  message(WARNING "Python development headers not found (${Python_INCLUDE_DIR}/Python.h): installing human_model "
+                  "WITHOUT the C++ binding human_model_binding (the JAX model and the python translation are "
+                  "installed). To add the binding: sudo apt install python3-dev (or python3.X-dev for this Python "
+                  "version), then reinstall.")
+  hkm_install_python_modules()
+  return()
+endif()
+
 #############################
 ## DEPENDENCIES            ##
 #############################
@@ -156,7 +185,7 @@ if(SKBUILD)
   # Python package: the binding and the python modules at the top level of site-packages (import human_model_binding,
   # human_kinematic_model, human_kinematic_model_jax); CMAKE_INSTALL_PREFIX is the wheel's platlib folder
   install(TARGETS human_model_binding LIBRARY DESTINATION .)
-  install(FILES scripts/human_kinematic_model.py scripts/human_kinematic_model_jax.py DESTINATION .)
+  hkm_install_python_modules()
   return()
 endif()
 
